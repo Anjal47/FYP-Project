@@ -1,4 +1,4 @@
-// HomeScreen.jsx
+// src/screens/HomeScreen.jsx
 import React from "react";
 import {
   SafeAreaView,
@@ -6,412 +6,352 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
-  ScrollView,
 } from "react-native";
-import Icon from "react-native-vector-icons/Feather"; // make sure this package is installed
-
-const PRIMARY = "#ff7a00"; // main orange
-const BG = "#f5f5f7";
-const CARD = "#ffffff";
-const TEXT_DARK = "#222";
+import Icon from "react-native-vector-icons/Feather";
 
 const HomeScreen = ({ navigation }) => {
+  const handleSOSPress = () => {
+    console.log("SOS tapped");
+  };
+
+  const handleSettingsPress = () => {
+    console.log("Settings pressed");
+  };
+
+  const handleProfilePress = () => {
+    console.log("Profile pressed");
+  };
+
+  const handleHomePress = () => {
+    console.log("Home pressed");
+  };
+
+  const goToCounseling = () => {
+    navigation.navigate("Counseling");
+  };
+
+  const goToReporting = () => {
+    console.log("Reporting card pressed");
+  };
+
+  const goToTraffic = () => {
+    console.log("Traffic card pressed");
+  };
+
+  const goToSupport = () => {
+    console.log("Support card pressed");
+  };
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={BG} />
-
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <Icon
-            name="heart"
-            size={24}
-            color={PRIMARY}
-            style={styles.logoIcon}
-          />
-          <Text style={styles.logoMain}>Angel</Text>
-          <Text style={styles.logoAccent}>Touch.</Text>
+    <SafeAreaView style={styles.container}>
+      {/* HEADER CARD */}
+      <View style={styles.headerCard}>
+        <View style={styles.brandRow}>
+          <Text style={styles.brand}>
+            <Text style={styles.brandMain}>Angel</Text>
+            <Text style={styles.brandAccent}>Touch.</Text>
+          </Text>
         </View>
 
-        <View style={styles.subtitleRow}>
-          <Icon name="smile" size={14} color="#999" style={{ marginRight: 4 }} />
-          <Text style={styles.subTitle}>You are not alone.</Text>
-        </View>
+        <Text style={styles.tagline}>You are not alone.</Text>
 
-        <View style={styles.headerChipsRow}>
+        <View style={styles.chipRow}>
           <View style={styles.chip}>
-            <Icon name="shield" size={14} color={PRIMARY} />
             <Text style={styles.chipText}>Safe Space</Text>
           </View>
           <View style={styles.chip}>
-            <Icon name="clock" size={14} color={PRIMARY} />
             <Text style={styles.chipText}>24/7 Support</Text>
           </View>
         </View>
       </View>
 
-      {/* MAIN CONTENT */}
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Section title with icon */}
-        <View style={styles.sectionHeaderRow}>
-          <Icon
-            name="zap"
-            size={18}
-            color={PRIMARY}
-            style={styles.sectionTitleIcon}
-          />
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-        </View>
-
-        {/* Grid actions */}
-        <View style={styles.gridRow}>
-          <FeatureCard
-            icon="clipboard"
-            label="Reporting"
-            description="File a report quickly & safely."
-            onPress={() => navigation && navigation.navigate("Reporting")}
-          />
-          <FeatureCard
-            icon="headphones"
-            label="Counseling & Therapy"
-            description="Talk to a professional."
-            onPress={() => navigation && navigation.navigate("Counseling")}
-          />
-        </View>
-
-        <View style={styles.gridRow}>
-          <FeatureCard
-            icon="navigation-2"
-            label="Traffic"
-            description="Safe route & traffic alerts."
-            onPress={() => navigation && navigation.navigate("Traffic")}
-          />
-          <FeatureCard
-            icon="life-buoy"
-            label="Support"
-            description="Get help & resources."
-            onPress={() => navigation && navigation.navigate("Support")}
-          />
-        </View>
-
-        {/* SOS AREA */}
-        <View style={styles.sosWrapper}>
-          <View style={styles.sosShadow} />
-
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={styles.sosButton}
-            onPress={() => {
-              // handle SOS press here
-            }}
-          >
-            <View style={styles.sosInnerGlow} />
-
-            <View style={styles.sosIconCircle}>
-              <Icon name="alert-triangle" size={34} color="#ffffff" />
+      {/* BODY */}
+      <View style={styles.body}>
+        {/* 🔸 CARDS GRID – heading "Quick Actions" removed */}
+        <View style={styles.cardsGrid}>
+          <TouchableOpacity style={styles.card} onPress={goToReporting}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="file-text" size={20} color="#FF7A1A" />
             </View>
-
-            <Text style={styles.sosText}>SOS</Text>
-
-            <View style={styles.sosHintRow}>
-              <Icon
-                name="info"
-                size={13}
-                color="#ffe8d0"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.sosHint}>Tap & hold for 3 seconds</Text>
-            </View>
+            <Text style={styles.cardTitle}>Reporting</Text>
+            <Text style={styles.cardSubtitle}>
+              File a report quickly & safely.
+            </Text>
           </TouchableOpacity>
 
-          {/* Side tab / quick slide button */}
-          <View style={styles.sideTab}>
-            <Icon name="phone-call" size={20} color="#fff" />
+          <TouchableOpacity style={styles.card} onPress={goToCounseling}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="message-circle" size={20} color="#FF7A1A" />
+            </View>
+            <Text style={styles.cardTitle}>Counseling & Therapy</Text>
+            <Text style={styles.cardSubtitle}>Talk to a professional.</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.card} onPress={goToTraffic}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="map-pin" size={20} color="#FF7A1A" />
+            </View>
+            <Text style={styles.cardTitle}>Traffic</Text>
+            <Text style={styles.cardSubtitle}>
+              Safe route & traffic alerts.
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.card} onPress={goToSupport}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="help-circle" size={20} color="#FF7A1A" />
+            </View>
+            <Text style={styles.cardTitle}>Support</Text>
+            <Text style={styles.cardSubtitle}>Get help & resources.</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* SOS concentric circles */}
+        <View style={styles.sosWrapper}>
+          <View style={styles.sosOuterCircle}>
+            <View style={styles.sosMiddleCircle}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.sosInnerCircle}
+                onPress={handleSOSPress}
+              >
+                <Icon name="alert-triangle" size={32} color="#FFFFFF" />
+                <Text style={styles.sosText}>SOS</Text>
+                <Text style={styles.sosHint}>Tap & hold for 3 seconds</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
 
-      {/* BOTTOM NAV */}
+      {/* ORANGE SIDE PILL */}
+      <View style={styles.sidePill} />
+
+      {/* BOTTOM NAV BAR */}
       <View style={styles.bottomBar}>
-        <NavItem
-          icon="settings"
-          label="Settings"
-          active={false}
-          onPress={() => navigation && navigation.navigate("Settings")}
-        />
-        <NavItem icon="home" label="Home" active onPress={() => {}} />
-        <NavItem
-          icon="user"
-          label="Profile"
-          active={false}
-          onPress={() => navigation && navigation.navigate("Profile")}
-        />
+        <TouchableOpacity style={styles.tabItem} onPress={handleSettingsPress}>
+          <Icon name="settings" size={20} color="#9A9A9A" />
+          <Text style={styles.tabLabel}>Settings</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
+          <View style={styles.homeIconWrapper}>
+            <Icon name="home" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress}>
+          <Icon name="user" size={20} color="#9A9A9A" />
+          <Text style={styles.tabLabel}>Profile</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-const FeatureCard = ({ icon, label, description, onPress }) => (
-  <TouchableOpacity activeOpacity={0.9} style={styles.card} onPress={onPress}>
-    <View style={styles.cardIconWrap}>
-      <Icon name={icon} size={26} color={PRIMARY} />
-    </View>
-    <Text style={styles.cardText}>{label}</Text>
-    <Text style={styles.cardDesc}>{description}</Text>
-  </TouchableOpacity>
-);
-
-const NavItem = ({ icon, label, active, onPress }) => (
-  <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPress}>
-    <View style={[styles.navIconBubble, active && styles.navIconBubbleActive]}>
-      <Icon name={icon} size={20} color={active ? "#fff" : "#888"} />
-    </View>
-    <Text style={[styles.navLabel, active && styles.navLabelActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
+export default HomeScreen;
 
 const styles = StyleSheet.create({
-  safe: {
+  container: {
     flex: 1,
-    backgroundColor: BG,
+    backgroundColor: "#F4F4F4",
   },
 
   /* HEADER */
-  header: {
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 18,
-    backgroundColor: CARD,
+  headerCard: {
+    backgroundColor: "#FFFFFF",
+    marginHorizontal: 0,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    elevation: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
     shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  statusPill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: BG,
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 8,
   },
-  statusText: {
-    fontSize: 12,
-    color: "#444",
-    fontWeight: "500",
-  },
-  logoRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-  },
-  logoMain: {
+  brand: {
     fontSize: 26,
     fontWeight: "700",
-    color: TEXT_DARK,
   },
-  logoAccent: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: PRIMARY,
-    marginLeft: 2,
+  brandMain: {
+    color: "#111",
   },
-  subTitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#777",
+  brandAccent: {
+    color: "#FF7A1A",
   },
-  headerChipsRow: {
+  tagline: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 14,
+  },
+  chipRow: {
     flexDirection: "row",
-    marginTop: 10,
+    gap: 10,
   },
   chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "#fff5ec",
-    marginRight: 8,
+    backgroundColor: "#FFEBDD",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 18,
   },
   chipText: {
-    fontSize: 11,
-    color: PRIMARY,
-    marginLeft: 4,
-    fontWeight: "500",
+    fontSize: 12,
+    color: "#FF7A1A",
+    fontWeight: "600",
   },
 
-  /* CONTENT */
-  content: {
+  /* BODY */
+  body: {
     flex: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: 24,
     paddingTop: 18,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: TEXT_DARK,
-    marginBottom: 8,
-  },
-  gridRow: {
+
+  cardsGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 12,
   },
   card: {
-    flex: 1,
-    backgroundColor: CARD,
-    borderRadius: 18,
+    width: "47%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    paddingHorizontal: 14,
     paddingVertical: 16,
-    paddingHorizontal: 12,
-    marginHorizontal: 6,
-    alignItems: "flex-start",
-    elevation: 3,
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 5,
-  },
-  cardIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff4e6",
-    marginBottom: 10,
-  },
-  cardText: {
-    fontSize: 13,
-    color: TEXT_DARK,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  cardDesc: {
-    fontSize: 11,
-    color: "#777",
-  },
-
-  /* SOS */
-  sosWrapper: {
-    marginTop: 25,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sosShadow: {
-    position: "absolute",
-    width: 250,
-    height: 250,
-    borderRadius: 110,
-    backgroundColor: PRIMARY,
-    opacity: 0.08,
-  },
-  sosButton: {
-    width: 200,
-    height: 200,
-    borderRadius: 90,
-    backgroundColor: PRIMARY,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 16,
-  },
-  sosInnerGlow: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: "#ffffff22",
-  },
-  sosIconCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 2,
-    borderColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  sosText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#fff",
-    letterSpacing: 1.4,
-  },
-  sosHint: {
-    fontSize: 11,
-    marginTop: 4,
-    color: "#ffe8d0",
-  },
-  sideTab: {
-    position: "absolute",
-    right: -26,
-    width: 56,
-    height: 80,
-    borderTopLeftRadius: 28,
-    borderBottomLeftRadius: 28,
-    backgroundColor: PRIMARY,
     elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: -2, height: 4 },
-    shadowRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
   },
-
-  /* BOTTOM NAV */
-  bottomBar: {
-    marginHorizontal: 36,
-    marginBottom: 18,
-    height: 62,
-    borderRadius: 32,
-    backgroundColor: CARD,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-evenly",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-  },
-  navItem: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  navIconBubble: {
+  cardIconWrapper: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    justifyContent: "center",
+    backgroundColor: "#FFF4E8",
     alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
-  navIconBubbleActive: {
-    backgroundColor: PRIMARY,
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 4,
   },
-  navLabel: {
-    fontSize: 10,
-    color: "#888",
+  cardSubtitle: {
+    fontSize: 12,
+    color: "#777",
+  },
+
+  sosWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+  sosOuterCircle: {
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "#FFE3C4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sosMiddleCircle: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "#FF9B3B",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sosInnerCircle: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "#FF7A1A",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  sosText: {
+    marginTop: 8,
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  sosHint: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#FFEBD2",
+    textAlign: "center",
+  },
+
+  sidePill: {
+    position: "absolute",
+    right: 0,
+    top: "55%",
+    width: 56,
+    height: 110,
+    backgroundColor: "#FF7A1A",
+    borderTopLeftRadius: 40,
+    borderBottomLeftRadius: 40,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: -2, height: 2 },
+  },
+
+  bottomBar: {
+    position: "absolute",
+    bottom: 16,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 28,
+    paddingHorizontal: 32,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  homeIconWrapper: {
+    backgroundColor: "#FF7A1A",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  tabLabel: {
+    fontSize: 11,
+    color: "#9A9A9A",
     marginTop: 2,
   },
-  navLabelActive: {
-    color: PRIMARY,
+  tabLabelActive: {
+    color: "#FF7A1A",
     fontWeight: "600",
   },
 });
-
-export default HomeScreen;
