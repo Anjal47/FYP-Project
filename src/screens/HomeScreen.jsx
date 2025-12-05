@@ -20,6 +20,7 @@ const HomeScreen = ({ navigation }) => {
 
   const handleProfilePress = () => {
     console.log("Profile pressed");
+    
   };
 
   const handleHomePress = () => {
