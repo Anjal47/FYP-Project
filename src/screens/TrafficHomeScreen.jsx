@@ -1,14 +1,17 @@
+// src/screens/TrafficHomeScreen.jsx
 import React from "react";
 import {
+  SafeAreaView,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
 } from "react-native";
-import Icon from "react-native-vector-icons/Feather"; // make sure react-native-vector-icons is installed
+import Icon from "react-native-vector-icons/Feather";
 
-const CounselingScreen = ({ navigation }) => {
+const TrafficHomeScreen = ({ navigation }) => {
+  const handleHomePress = () => navigation.navigate("Home");
+
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
@@ -19,32 +22,39 @@ const CounselingScreen = ({ navigation }) => {
         >
           <Icon name="arrow-left" size={20} color="#111" />
           <Text style={styles.title}>
-            <Text style={styles.titleHighlight}> Counseling</Text>
-            <Text style={styles.titleNormal}>Therapy.</Text>
+            <Text style={styles.titleHighlight}> Traffic</Text>
+            <Text style={styles.titleNormal}>.</Text>
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* BODY */}
       <View style={styles.body}>
-        <Text style={styles.subtitle}>This is your safe space.</Text>
+        <Text style={styles.subtitle}>Stay safe on the road.</Text>
 
-        <View style={styles.buttonsWrapper}>
-          <MenuButton
-            label="Visit Counselors"
-            onPress={() => navigation.navigate("CounselingForm")}
-           arrowColor="#FF7A1A"
-            />
-
-          <MenuButton
-            label="Urgent Therapy"
-            onPress={() => navigation.navigate("TherapyScreen")}
-            arrowColor="#111"
+        <View style={styles.cardsGrid}>
+          <TrafficCard
+            title="Report a Violation"
+            subtitle="Report unsafe driving or incidents."
+            onPress={() => navigation.navigate("TrafficReport")}
           />
-          <MenuButton
-            label="Connect to NGOs"
-            onPress={() => navigation?.navigate?.("ConnectToNGOs")}
-            arrowColor="#111"
+
+          <TrafficCard
+            title="View Traffic Rules"
+            subtitle="Know your rights and duties."
+            onPress={() => navigation.navigate("TrafficRules")}
+          />
+
+          <TrafficCard
+            title="Pay Fine"
+            subtitle="Manage and clear penalties."
+            onPress={() => console.log("Pay Fine")}
+          />
+
+          <TrafficCard
+            title="Reporting"
+            subtitle="See your previous submissions."
+            onPress={() => console.log("Reporting")}
           />
         </View>
       </View>
@@ -57,9 +67,11 @@ const CounselingScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.tabItem}>
           <Icon name="settings" size={20} color="#111" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
+
+        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
           <Icon name="home" size={22} color="#111" />
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.tabItem}>
           <Icon name="user" size={20} color="#111" />
         </TouchableOpacity>
@@ -68,10 +80,11 @@ const CounselingScreen = ({ navigation }) => {
   );
 };
 
-const MenuButton = ({ label, onPress, arrowColor }) => (
-  <TouchableOpacity style={styles.menuButton} onPress={onPress}>
-    <Text style={styles.menuLabel}>{label}</Text>
-    <Icon name="arrow-right" size={18} color={arrowColor} />
+const TrafficCard = ({ title, subtitle, onPress }) => (
+  <TouchableOpacity style={styles.card} onPress={onPress}>
+    <View style={styles.cardIconPlaceholder} />
+    <Text style={styles.cardTitle}>{title}</Text>
+    <Text style={styles.cardSubtitle}>{subtitle}</Text>
   </TouchableOpacity>
 );
 
@@ -113,28 +126,42 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111",
     textAlign: "center",
-    marginBottom: 32,
+    marginBottom: 28,
   },
-  buttonsWrapper: {
-    gap: 20,
-  },
-  menuButton: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+  cardsGrid: {
     flexDirection: "row",
-    alignItems: "center",
+    flexWrap: "wrap",
     justifyContent: "space-between",
+  },
+  card: {
+    width: "47%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    marginBottom: 26,
     shadowColor: "#000",
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  menuLabel: {
-    fontSize: 16,
-    color: "#222",
+  cardIconPlaceholder: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FFF4E8",
+    marginBottom: 10,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: "#777",
   },
   sidePill: {
     position: "absolute",
@@ -175,4 +202,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CounselingScreen;
+export default TrafficHomeScreen;

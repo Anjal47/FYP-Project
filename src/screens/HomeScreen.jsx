@@ -6,6 +6,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 
@@ -15,16 +16,15 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleSettingsPress = () => {
-    console.log("Settings pressed");
+    navigation.navigate("Settings");
   };
 
   const handleProfilePress = () => {
     console.log("Profile pressed");
-    
   };
 
   const handleHomePress = () => {
-    console.log("Home pressed");
+    navigation.navigate("Home");
   };
 
   const goToCounseling = () => {
@@ -32,15 +32,36 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const goToReporting = () => {
-    console.log("Reporting card pressed");
+    navigation.navigate("ReportingHome");
   };
 
   const goToTraffic = () => {
-    console.log("Traffic card pressed");
+    navigation.navigate("TrafficHome");
   };
 
   const goToSupport = () => {
-    console.log("Support card pressed");
+    navigation.navigate("Support");
+  };
+
+  /**
+   * NEW: extra cards
+   * IMPORTANT:
+   * - Change these route names to your actual screens once created.
+   */
+  const goToWasteManagement = () => {
+    navigation.navigate("WasteManagement"); // <-- create/register this screen OR rename
+  };
+
+  const goToRoadComplaint = () => {
+    navigation.navigate("RoadComplaint"); // <-- create/register this screen OR rename
+  };
+
+  /**
+   * NEW: Search button action
+   * You can navigate to a Search screen or open a modal.
+   */
+  const handleSearchPress = () => {
+    navigation.navigate("Search"); // <-- create/register this screen OR rename
   };
 
   return (
@@ -56,19 +77,30 @@ const HomeScreen = ({ navigation }) => {
 
         <Text style={styles.tagline}>You are not alone.</Text>
 
-        <View style={styles.chipRow}>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>Safe Space</Text>
-          </View>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>24/7 Support</Text>
-          </View>
+        {/* CLASSIC SEARCH BUTTON (pill search bar) */}
+        <View style={styles.searchRow}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.searchBar}
+            onPress={handleSearchPress}
+          >
+            <Icon name="search" size={16} color="#9A9A9A" />
+            <Text style={styles.searchPlaceholder}>Search services...</Text>
+
+            {/* subtle right icon to feel like a real search field */}
+            <View style={styles.searchRightIconWrap}>
+              <Icon name="chevron-right" size={18} color="#B5B5B5" />
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* BODY */}
-      <View style={styles.body}>
-        {/* 🔸 CARDS GRID – heading "Quick Actions" removed */}
+      {/* BODY (Scrollable) */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* CARDS GRID */}
         <View style={styles.cardsGrid}>
           <TouchableOpacity style={styles.card} onPress={goToReporting}>
             <View style={styles.cardIconWrapper}>
@@ -105,6 +137,28 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.cardTitle}>Support</Text>
             <Text style={styles.cardSubtitle}>Get help & resources.</Text>
           </TouchableOpacity>
+
+          {/* NEW CARD: Waste Management */}
+          <TouchableOpacity style={styles.card} onPress={goToWasteManagement}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="trash-2" size={20} color="#FF7A1A" />
+            </View>
+            <Text style={styles.cardTitle}>Waste Management</Text>
+            <Text style={styles.cardSubtitle}>
+              Report garbage, bins & pickup issues.
+            </Text>
+          </TouchableOpacity>
+
+          {/* NEW CARD: Road Complaint */}
+          <TouchableOpacity style={styles.card} onPress={goToRoadComplaint}>
+            <View style={styles.cardIconWrapper}>
+              <Icon name="alert-circle" size={20} color="#FF7A1A" />
+            </View>
+            <Text style={styles.cardTitle}>Road Complaint</Text>
+            <Text style={styles.cardSubtitle}>
+              Report potholes, damage & road hazards.
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* SOS concentric circles */}
@@ -123,7 +177,10 @@ const HomeScreen = ({ navigation }) => {
             </View>
           </View>
         </View>
-      </View>
+
+        {/* SPACE so content never hides behind bottomBar */}
+        <View style={{ height: 140 }} />
+      </ScrollView>
 
       {/* ORANGE SIDE PILL */}
       <View style={styles.sidePill} />
@@ -194,25 +251,42 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 14,
   },
-  chipRow: {
+
+  /* Search (classic pill) */
+  searchRow: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
-  },
-  chip: {
-    backgroundColor: "#FFEBDD",
+    backgroundColor: "#F2F2F2",
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#E3E3E3",
+    flex: 1,
   },
-  chipText: {
-    fontSize: 12,
-    color: "#FF7A1A",
-    fontWeight: "600",
+  searchPlaceholder: {
+    fontSize: 13,
+    color: "#9A9A9A",
+    flex: 1,
+  },
+  searchRightIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ECECEC",
   },
 
-  /* BODY */
-  body: {
-    flex: 1,
+  /* Scroll content */
+  scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 18,
   },
