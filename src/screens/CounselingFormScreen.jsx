@@ -11,20 +11,32 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
 
-const problemOptions = [
-  "Anxiety",
-  "Depression",
-  "Family Issues",
-  "Relationship Issues",
-  "Other",
-];
+const BASE_URL = "http://10.0.2.2:5000";
 
+const problemOptions = ["Anxiety", "Depression", "Family Issues", "Relationship Issues", "Other"];
 const genderOptions = ["Male", "Female"];
 const languageOptions = ["Nepali", "English"];
 const modeOptions = ["Online", "Offline"];
+
+async function apiCreateCounselingRequest(token, payload) {
+  const res = await fetch(`${BASE_URL}/api/counseling/requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Failed to submit counseling request");
+  return data;
+}
 
 const CounselingFormScreen = ({ navigation }) => {
   // form values
@@ -41,6 +53,8 @@ const CounselingFormScreen = ({ navigation }) => {
   const [languageOpen, setLanguageOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const closeAllDropdowns = () => {
     setProblemOpen(false);
     setGenderOpen(false);
@@ -48,42 +62,71 @@ const CounselingFormScreen = ({ navigation }) => {
     setModeOpen(false);
   };
 
-  const handleSubmit = () => {
-    const message = `Problem: ${problem || "-"}
-Age: ${age || "-"}
-Gender: ${gender || "-"}
-Language: ${language || "-"}
-Mode: ${mode || "-"}
-Description: ${description || "-"}`;
-
-    Alert.alert("Form Submitted", message, [
-      {
-        text: "OK",
-        onPress: () => navigation.navigate("Counselors"),
-      },
-    ]);
+  const validate = () => {
+    if (!problem || !age || !gender || !language || !mode) {
+      Alert.alert("Missing", "Please fill all required fields.");
+      return false;
+    }
+    const a = Number(age);
+    if (!Number.isFinite(a) || a <= 0) {
+      Alert.alert("Invalid age", "Please enter a valid age.");
+      return false;
+    }
+    return true;
   };
 
-  const handleSettingsPress = () => {
-    Alert.alert("Settings", "Navigate to Settings screen (wire later).");
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    try {
+      setSubmitting(true);
+
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
+
+      const payload = {
+        problem,
+        age: Number(age),
+        gender,
+        language,
+        mode,
+        description,
+      };
+
+      const created = await apiCreateCounselingRequest(token, payload);
+
+      Alert.alert(
+        "Submitted ✅",
+        "Your counseling request has been submitted. Now choose a counselor.",
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              navigation.navigate("Counselors", {
+                requestId: created?.request?._id || null,
+              }),
+          },
+        ]
+      );
+    } catch (e) {
+      Alert.alert("Submit failed", e?.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleHomePress = () => {
-    navigation.navigate("Home");
-  };
-
-  const handleProfilePress = () => {
-    Alert.alert("Profile", "Navigate to Profile screen (wire later).");
-  };
+  const handleSettingsPress = () => navigation.navigate("Settings");
+  const handleHomePress = () => navigation.navigate("Home");
+  const handleProfilePress = () => navigation.navigate("Profile");
 
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backRow}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={20} color="#111" />
           <Text style={styles.headerTitle}> Counseling</Text>
         </TouchableOpacity>
@@ -99,27 +142,19 @@ Description: ${description || "-"}`;
           keyboardShouldPersistTaps="handled"
         >
           {/* Problem / Issue */}
-          <Text style={styles.label}>Problem/Issue</Text>
+          <Text style={styles.label}>Problem/Issue *</Text>
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => {
               closeAllDropdowns();
               setProblemOpen((prev) => !prev);
             }}
+            activeOpacity={0.9}
           >
-            <Text
-              style={[
-                styles.placeholder,
-                problem ? styles.selectedValue : null,
-              ]}
-            >
+            <Text style={[styles.placeholder, problem ? styles.selectedValue : null]}>
               {problem || "Problem..."}
             </Text>
-            <Icon
-              name={problemOpen ? "chevron-up" : "chevron-down"}
-              size={18}
-              color="#666"
-            />
+            <Icon name={problemOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
           {problemOpen && (
             <View style={styles.dropdownList}>
@@ -139,12 +174,12 @@ Description: ${description || "-"}`;
           )}
 
           {/* Age & Gender */}
-          <View className="row" style={styles.row}>
+          <View style={styles.row}>
             <View style={styles.rowItem}>
-              <Text style={styles.label}>Age</Text>
+              <Text style={styles.label}>Age *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="XXXX"
+                placeholder="XX"
                 placeholderTextColor="#B0B0B0"
                 keyboardType="numeric"
                 value={age}
@@ -152,28 +187,20 @@ Description: ${description || "-"}`;
               />
             </View>
 
-            <View style={styles.rowItem}>
-              <Text style={styles.label}>Gender</Text>
+            <View style={[styles.rowItem, { marginRight: 0 }]}>
+              <Text style={styles.label}>Gender *</Text>
               <TouchableOpacity
                 style={styles.dropdown}
                 onPress={() => {
                   closeAllDropdowns();
                   setGenderOpen((prev) => !prev);
                 }}
+                activeOpacity={0.9}
               >
-                <Text
-                  style={[
-                    styles.placeholder,
-                    gender ? styles.selectedValue : null,
-                  ]}
-                >
+                <Text style={[styles.placeholder, gender ? styles.selectedValue : null]}>
                   {gender || "Select..."}
                 </Text>
-                <Icon
-                  name={genderOpen ? "chevron-up" : "chevron-down"}
-                  size={18}
-                  color="#666"
-                />
+                <Icon name={genderOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
               </TouchableOpacity>
               {genderOpen && (
                 <View style={styles.dropdownList}>
@@ -195,27 +222,19 @@ Description: ${description || "-"}`;
           </View>
 
           {/* Language Preference */}
-          <Text style={styles.label}>Language Preference</Text>
+          <Text style={styles.label}>Language Preference *</Text>
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => {
               closeAllDropdowns();
               setLanguageOpen((prev) => !prev);
             }}
+            activeOpacity={0.9}
           >
-            <Text
-              style={[
-                styles.placeholder,
-                language ? styles.selectedValue : null,
-              ]}
-            >
+            <Text style={[styles.placeholder, language ? styles.selectedValue : null]}>
               {language || "Language..."}
             </Text>
-            <Icon
-              name={languageOpen ? "chevron-up" : "chevron-down"}
-              size={18}
-              color="#666"
-            />
+            <Icon name={languageOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
           {languageOpen && (
             <View style={styles.dropdownList}>
@@ -235,27 +254,19 @@ Description: ${description || "-"}`;
           )}
 
           {/* Mode of Communication */}
-          <Text style={styles.label}>Mode of Communication</Text>
+          <Text style={styles.label}>Mode of Communication *</Text>
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => {
               closeAllDropdowns();
               setModeOpen((prev) => !prev);
             }}
+            activeOpacity={0.9}
           >
-            <Text
-              style={[
-                styles.placeholder,
-                mode ? styles.selectedValue : null,
-              ]}
-            >
+            <Text style={[styles.placeholder, mode ? styles.selectedValue : null]}>
               {mode || "Mode of Communication..."}
             </Text>
-            <Icon
-              name={modeOpen ? "chevron-up" : "chevron-down"}
-              size={18}
-              color="#666"
-            />
+            <Icon name={modeOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
           {modeOpen && (
             <View style={styles.dropdownList}>
@@ -288,8 +299,20 @@ Description: ${description || "-"}`;
           <Text style={styles.helperText}>Please fill every details.</Text>
 
           {/* Submit */}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitText}>Submit</Text>
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && { opacity: 0.75 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+            activeOpacity={0.9}
+          >
+            {submitting ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <ActivityIndicator color="#111" />
+                <Text style={styles.submitText}>Submitting...</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitText}>Submit</Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -370,19 +393,9 @@ const styles = StyleSheet.create({
     elevation: 5,
     overflow: "hidden",
   },
-  dropdownItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  dropdownItemText: {
-    fontSize: 14,
-    color: "#222",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
+  dropdownItem: { paddingHorizontal: 14, paddingVertical: 10 },
+  dropdownItemText: { fontSize: 14, color: "#222" },
+  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   rowItem: { flex: 1, marginRight: 8 },
   input: {
     backgroundColor: "#FFFFFF",

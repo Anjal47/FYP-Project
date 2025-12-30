@@ -6,42 +6,30 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Modal,
   Alert,
   TouchableWithoutFeedback,
   Keyboard,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { postJSON } from "../utils/api";
 
 const ORANGE = "#FF7A1A";
 
-/**
- * TEMP DEMO ACCOUNTS (frontend-only)
- * Replace later with backend API
- */
-const DEMO_ACCOUNTS = {
-  user: {
-    email: "user@angeltouch.com",
-    password: "user1234",
-    routeAfterLogin: "Home",
-  },
-  counsellor: {
-    email: "counsellor@angeltouch.com",
-    password: "counsellor1234",
-    routeAfterLogin: "CounsellorHome",
-  },
-};
+function routeByRole(role) {
+  if (role === "admin") return "AdminTabs";
+  if (role === "counsellor") return "CounsellorHome";
+  if (role === "therapist") return "TherapistHome";
+  if (role === "police") return "PoliceHome";
+  return "Home";
+}
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const [role, setRole] = useState("user"); // user | counsellor
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
-
-  const roleLabel = role === "counsellor" ? "Counsellor" : "User";
-  const acc = DEMO_ACCOUNTS[role];
-
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const e = email.trim().toLowerCase();
     const p = password.trim();
 
@@ -50,52 +38,41 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
-    const isValid = e === acc.email && p === acc.password;
+    try {
+      setLoading(true);
 
-    if (!isValid) {
-      Alert.alert(
-        "Invalid login",
-        `Wrong credentials for ${roleLabel}.\n\nTry:\n${acc.email}\n${acc.password}`
-      );
-      return;
+      // ✅ backend login
+      const res = await postJSON("/api/auth/login", { email: e, password: p });
+      // expected: { ok:true, token, user:{ id, fullName, email, role } }
+
+      const token = res?.token;
+      const user = res?.user;
+
+      if (!token || !user?.role) {
+        throw new Error("Invalid response from server");
+      }
+
+      // ✅ save for auto-login + role routing
+      await AsyncStorage.setItem("token", token);
+      await AsyncStorage.setItem("user", JSON.stringify(user));
+
+      // ✅ go to correct dashboard
+      const next = routeByRole(user.role);
+      navigation.reset({ index: 0, routes: [{ name: next }] });
+    } catch (err) {
+      Alert.alert("Login failed", err?.message || "Unable to login");
+    } finally {
+      setLoading(false);
     }
-
-    // ✅ Always works + clears back stack
-    navigation.reset({
-      index: 0,
-      routes: [{ name: acc.routeAfterLogin }],
-    });
-  };
-
-  const selectRole = (newRole) => {
-    setRole(newRole);
-    setRoleModalOpen(false);
   };
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* tap outside input to close keyboard */}
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={s.page}>
           <Text style={s.brand}>
             Angel<Text style={s.brandBold}>Touch.</Text>
           </Text>
-
-          {/* Role Picker */}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={s.roleBox}
-            onPress={() => setRoleModalOpen(true)}
-          >
-            <View>
-              <Text style={s.roleSmall}>Login as</Text>
-              <Text style={s.roleValue}>{roleLabel}</Text>
-              <Text style={s.hint}>
-                Demo: {acc.email} / {acc.password}
-              </Text>
-            </View>
-            <Text style={s.roleChevron}>▾</Text>
-          </TouchableOpacity>
 
           <Text style={s.label}>Email</Text>
           <TextInput
@@ -128,10 +105,18 @@ export default function LoginScreen({ navigation }) {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            style={s.loginBtn}
+            style={[s.loginBtn, loading && { opacity: 0.7 }]}
             onPress={handleLogin}
+            disabled={loading}
           >
-            <Text style={s.loginBtnText}>Log In</Text>
+            {loading ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={s.loginBtnText}>Logging in...</Text>
+              </View>
+            ) : (
+              <Text style={s.loginBtnText}>Log In</Text>
+            )}
           </TouchableOpacity>
 
           <View style={s.bottomRow}>
@@ -141,66 +126,9 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* ✅ Role Modal */}
-          <Modal
-            visible={roleModalOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setRoleModalOpen(false)}
-          >
-            {/* Background tap closes modal */}
-            <TouchableWithoutFeedback onPress={() => setRoleModalOpen(false)}>
-              <View style={s.overlay}>
-                {/* Stop background click from closing when tapping inside */}
-                <TouchableWithoutFeedback onPress={() => {}}>
-                  <View style={s.modalCard}>
-                    <Text style={s.modalTitle}>Select Role</Text>
-
-                    <TouchableOpacity
-                      style={[s.roleItem, role === "user" && s.roleItemActive]}
-                      onPress={() => selectRole("user")}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        style={[
-                          s.roleItemText,
-                          role === "user" && s.roleItemTextActive,
-                        ]}
-                      >
-                        User
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        s.roleItem,
-                        role === "counsellor" && s.roleItemActive,
-                      ]}
-                      onPress={() => selectRole("counsellor")}
-                      activeOpacity={0.85}
-                    >
-                      <Text
-                        style={[
-                          s.roleItemText,
-                          role === "counsellor" && s.roleItemTextActive,
-                        ]}
-                      >
-                        Counsellor
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={s.modalCloseBtn}
-                      onPress={() => setRoleModalOpen(false)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={s.modalCloseText}>Close</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableWithoutFeedback>
-              </View>
-            </TouchableWithoutFeedback>
-          </Modal>
+          <Text style={s.note}>
+            Backend login decides role automatically (admin/counsellor/therapist/police/user).
+          </Text>
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
@@ -228,22 +156,6 @@ const s = StyleSheet.create({
   },
   brandBold: { fontWeight: "900", color: "#111" },
 
-  roleBox: {
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    ...shadow,
-  },
-  roleSmall: { fontSize: 12, color: "#777" },
-  roleValue: { fontSize: 15, fontWeight: "800", color: "#111" },
-  roleChevron: { fontSize: 18, color: "#333" },
-  hint: { marginTop: 4, fontSize: 11, color: "#666" },
-
   label: { fontSize: 13, fontWeight: "700", color: "#111", marginBottom: 6 },
   input: {
     borderRadius: 20,
@@ -270,38 +182,5 @@ const s = StyleSheet.create({
   bottomText: { color: "#333", fontSize: 12 },
   bottomLink: { color: ORANGE, fontSize: 12, fontWeight: "900" },
 
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    padding: 18,
-  },
-  modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 18,
-    ...shadow,
-  },
-  modalTitle: { fontSize: 16, fontWeight: "900", color: "#111", marginBottom: 12 },
-
-  roleItem: {
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: "#F6F6F6",
-    paddingHorizontal: 12,
-    marginBottom: 10,
-  },
-  roleItemActive: { borderWidth: 1, borderColor: ORANGE, backgroundColor: "#fff" },
-  roleItemText: { fontSize: 14, fontWeight: "800", color: "#111" },
-  roleItemTextActive: { color: ORANGE },
-
-  modalCloseBtn: {
-    marginTop: 4,
-    paddingVertical: 12,
-    borderRadius: 30,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#DDD",
-  },
-  modalCloseText: { fontSize: 14, fontWeight: "900", color: "#111" },
+  note: { marginTop: 12, textAlign: "center", fontSize: 11, color: "#666" },
 });

@@ -1,7 +1,8 @@
 // src/navigation/AuthStack.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /* -------------------- AUTH SCREENS -------------------- */
 import WelcomeScreen from "../screens/WelcomeScreen";
@@ -30,26 +31,83 @@ import ReportingHomeScreen from "../screens/ReportingHomeScreen";
 import ConnectToNGOsScreen from "../screens/ConnectToNGOsScreen";
 
 /* -------------------- COUNSELLOR SCREENS -------------------- */
-import CounsellorHomeScreen from "../screens/counsellor/CounsellorHomeScreen";
-import CounsellorClientsScreen from "../screens/counsellor/CounsellorClientsScreen";
+import CounsellorHomeScreen from "../screens/Counsellor/CounsellorHomeScreen";
+import CounsellorClientsScreen from "../screens/Counsellor/CounsellorClientsScreen";
+
+/* -------------------- THERAPIST SCREENS (adjust paths) -------------------- */
+import TherapistHomeScreen from "../screens/Therapist/TherapistHomeScreen";
+
+/* -------------------- POLICE SCREENS (adjust paths) -------------------- */
+import PoliceHomeScreen from "../screens/Police/PoliceHomeScreen";
+
+/* -------------------- ADMIN (Tabs) -------------------- */
+import AdminTabs from "./AdminTabs"; // create this file in src/navigation/AdminTabs.jsx
+import ProfileScreen from "../screens/ProfileScreen";
 
 const Stack = createNativeStackNavigator();
 
+/**
+ * Decide initial route based on stored user role.
+ */
+function getRoleRoute(role) {
+  if (role === "admin") return "AdminTabs";
+  if (role === "counsellor") return "CounsellorHome";
+  if (role === "therapist") return "TherapistHome";
+  if (role === "police") return "PoliceHome";
+  return "Home";
+}
+
 export default function AuthStack() {
+  const [booting, setBooting] = useState(true);
+  const [initialRoute, setInitialRoute] = useState("Welcome");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function boot() {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const userStr = await AsyncStorage.getItem("user");
+        const user = userStr ? JSON.parse(userStr) : null;
+
+        // If logged in already -> go role dashboard
+        if (mounted && token && user?.role) {
+          setInitialRoute(getRoleRoute(user.role));
+        } else {
+          setInitialRoute("Welcome");
+        }
+      } catch (e) {
+        setInitialRoute("Welcome");
+      } finally {
+        if (mounted) setBooting(false);
+      }
+    }
+
+    boot();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (booting) return null;
+
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
         {/* AUTH */}
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
+        {/* ADMIN */}
+        <Stack.Screen name="AdminTabs" component={AdminTabs} />
+
         {/* USER */}
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Counseling" component={CounselingScreen} />
         <Stack.Screen name="CounselingForm" component={CounselingFormScreen} />
-        <Stack.Screen name="Counselors" component={CounselorsScreen} />
+        <Stack.Screen name="Counselors" component={CounelorsScreenFix} />
         <Stack.Screen name="TherapyScreen" component={TherapyScreen} />
         <Stack.Screen name="BookTherapyScreen" component={BookTherapyScreen} />
         <Stack.Screen name="TrafficHome" component={TrafficHomeScreen} />
@@ -61,11 +119,28 @@ export default function AuthStack() {
         <Stack.Screen name="Support" component={SupportScreen} />
         <Stack.Screen name="ConnectToNGOs" component={ConnectToNGOsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
 
         {/* COUNSELLOR */}
         <Stack.Screen name="CounsellorHome" component={CounsellorHomeScreen} />
         <Stack.Screen name="CounsellorClients" component={CounsellorClientsScreen} />
+          <Stack.Screen name="CounsellorAppointments" component={CounsellorAppointments} />
+
+        {/* THERAPIST */}
+        <Stack.Screen name="TherapistHome" component={TherapistHomeScreen} />
+
+        {/* POLICE */}
+        <Stack.Screen name="PoliceHome" component={PoliceHomeScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
+}
+
+/**
+ * Small safety wrapper:
+ * In your paste you had CounselorsScreen import correct,
+ * BUT I’m preventing a common typo crash.
+ */
+function CounelorsScreenFix(props) {
+  return <CounselorsScreen {...props} />;
 }

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+﻿const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 
 const UserSchema = new mongoose.Schema(
@@ -9,11 +9,16 @@ const UserSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["user", "counsellor", "therapist", "admin"],
+      enum: ["user", "admin", "counsellor", "police", "therapist"],
       default: "user",
     },
 
+    // ✅ Staff profile fields
+    bio: { type: String, default: "" },
+    qualification: { type: String, default: "" },
+    workingArea: { type: String, default: "" },
     phone: { type: String, default: "" },
+
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
