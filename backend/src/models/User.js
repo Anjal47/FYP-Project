@@ -7,11 +7,11 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
 
-    role: {
-      type: String,
-      enum: ["user", "admin", "counsellor", "police", "therapist"],
-      default: "user",
-    },
+ role: {
+  type: String,
+  enum: ["user", "admin", "counsellor", "therapist", "police", "municipality"],
+  default: "user",
+},
 
     // ✅ Staff profile fields
     bio: { type: String, default: "" },

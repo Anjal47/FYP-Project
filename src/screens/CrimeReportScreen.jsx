@@ -9,36 +9,108 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const ORANGE = "#FF7A1A";
+const BASE_URL = "http://10.0.2.2:5000";
 
-const CrimeReportScreen = ({ navigation, route }) => {
-  const category = route.params?.category || "Crime";
+async function apiCreateReport(token, payload) {
+  const res = await fetch(`${BASE_URL}/api/reports`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
+  return data;
+}
+
+export default function CrimeReportScreen({ navigation, route }) {
+  // ✅ hooks ALWAYS at top, no conditional returns above them
+  const category = route?.params?.category || "Crime";
 
   const [description, setDescription] = useState("");
-  const [location, setLocation] = useState("");
+  const [area, setArea] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // ✅ safe split (no hooks)
+  const words = String(category).split(" ");
+  const firstWord = words[0] || "Crime";
+  const rest = words.slice(1).join(" ");
 
   const handleBack = () => navigation.goBack();
-
-  const handleSubmit = () => {
-    if (!description.trim()) {
-      Alert.alert("Incomplete", "Please enter a description.");
-      return;
-    }
-    Alert.alert(
-      "Report Submitted",
-      `Category: ${category}\nLocation: ${location || "Not provided"}`,
-      [{ text: "OK", onPress: () => navigation.goBack() }]
-    );
-  };
-
   const handleHomePress = () => navigation.navigate("Home");
 
-  // Split category to color first word like "Domestic" in orange, rest black
-  const [firstWord, ...restWords] = category.split(" ");
-  const rest = restWords.join(" ");
+  const getToken = async () => AsyncStorage.getItem("token");
+
+  const onSubmit = async () => {
+    try {
+      const d = description.trim();
+      const a = area.trim();
+
+      if (!d) return Alert.alert("Incomplete", "Please enter a description.");
+      if (!a) return Alert.alert("Missing", "Area / Location is required.");
+
+      setSubmitting(true);
+
+      const token = await getToken();
+      if (!token) {
+        return Alert.alert("Login required", "Token not found. Please login again.");
+      }
+
+      const payload = {
+        type: category,     // ✅ Domestic Violence / Harassment / Cyber Crime / Theft etc.
+        area: a,            // ✅ required
+        description: d,
+        priority: "Medium",
+      };
+
+      const data = await apiCreateReport(token, payload);
+
+      // ✅ DEBUG (look at Metro console)
+      console.log("✅ CREATE REPORT RESPONSE:", JSON.stringify(data, null, 2));
+
+      const reportObj =
+        data?.report ||
+        data?.data?.report ||
+        data?.result?.report ||
+        data?.payload?.report ||
+        null;
+
+      const reportId =
+        reportObj?.reportCode ||
+        reportObj?.id ||
+        data?.reportCode ||
+        data?.id ||
+        "N/A";
+
+      Alert.alert(
+        "Report Submitted ✅",
+        `Category: ${category}\nLocation: ${a}\n\nYour Report ID:\n${reportId}\n\nKeep this ID safe to check status later.`,
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setDescription("");
+              setArea("");
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+    } catch (e) {
+      Alert.alert("Error", e?.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -69,44 +141,62 @@ const CrimeReportScreen = ({ navigation, route }) => {
           onChangeText={setDescription}
         />
 
-        {/* Location */}
+        {/* Area / Location */}
         <View style={styles.locationHeaderRow}>
           <Icon name="map-pin" size={16} color={ORANGE} />
-          <Text style={styles.locationLabel}> Add Location</Text>
+          <Text style={styles.locationLabel}> Area / Location (required)</Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.locationBox}
-          onPress={() =>
-            Alert.alert("Location", "Later you can connect GPS / map picker.")
-          }
-        >
-          <Text style={styles.locationPlaceholder}>
-            Tap to add location (optional)
-          </Text>
-        </TouchableOpacity>
+        <TextInput
+          style={styles.locationInput}
+          placeholder="e.g. Kathmandu, Baneshwor, near XYZ..."
+          placeholderTextColor="#B0B0B0"
+          value={area}
+          onChangeText={setArea}
+        />
 
         {/* MEDIA ROW */}
         <View style={styles.mediaRow}>
-          <TouchableOpacity style={styles.mediaCard}>
+          <TouchableOpacity
+            style={styles.mediaCard}
+            onPress={() => Alert.alert("Later", "Image upload next step")}
+          >
             <Icon name="image" size={20} color="#111" />
             <Text style={styles.mediaLabel}>Image</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.mediaCard}>
+          <TouchableOpacity
+            style={styles.mediaCard}
+            onPress={() => Alert.alert("Later", "Audio upload next step")}
+          >
             <Icon name="mic" size={20} color="#111" />
             <Text style={styles.mediaLabel}>Audio</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.mediaCard}>
+          <TouchableOpacity
+            style={styles.mediaCard}
+            onPress={() => Alert.alert("Later", "Video upload next step")}
+          >
             <Icon name="video" size={20} color="#111" />
             <Text style={styles.mediaLabel}>Video</Text>
           </TouchableOpacity>
         </View>
 
         {/* SUBMIT BUTTON */}
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Submit Report</Text>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.submitButton, submitting && { opacity: 0.7 }]}
+          onPress={onSubmit}
+          disabled={submitting}
+        >
+          {submitting ? (
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <ActivityIndicator color="#111" />
+              <Text style={[styles.submitText, { marginLeft: 10 }]}>Submitting…</Text>
+            </View>
+          ) : (
+            <Text style={styles.submitText}>Submit Report</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -114,22 +204,10 @@ const CrimeReportScreen = ({ navigation, route }) => {
       <View style={styles.sidePill} />
 
       {/* BOTTOM BAR */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
+
     </SafeAreaView>
   );
-};
-
-export default CrimeReportScreen;
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F4" },
@@ -147,11 +225,7 @@ const styles = StyleSheet.create({
   headerDot: { color: "#111" },
 
   body: { flex: 1 },
-  bodyContent: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 140,
-  },
+  bodyContent: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 140 },
 
   descriptionInput: {
     backgroundColor: "#FFFFFF",
@@ -170,21 +244,16 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  locationHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  locationLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#111",
-  },
-  locationBox: {
+  locationHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  locationLabel: { fontSize: 14, fontWeight: "600", color: "#111" },
+
+  locationInput: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 18,
+    paddingVertical: 14,
+    fontSize: 14,
+    color: "#222",
     marginBottom: 20,
     shadowColor: "#000",
     shadowOpacity: 0.08,
@@ -192,16 +261,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  locationPlaceholder: {
-    fontSize: 13,
-    color: "#999",
-  },
 
-  mediaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
+  mediaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
   mediaCard: {
     width: "30%",
     backgroundColor: "#FFFFFF",
@@ -214,11 +275,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  mediaLabel: {
-    fontSize: 12,
-    color: "#555",
-    marginTop: 6,
-  },
+  mediaLabel: { fontSize: 12, color: "#555", marginTop: 6 },
 
   submitButton: {
     alignSelf: "center",
@@ -245,10 +302,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 40,
     borderBottomLeftRadius: 40,
     elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
   },
 
   bottomBar: {
@@ -264,10 +317,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     width: 220,
     elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
   tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
 });

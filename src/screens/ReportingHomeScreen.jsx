@@ -1,4 +1,3 @@
-// src/screens/ReportingHomeScreen.jsx
 import React from "react";
 import {
   SafeAreaView,
@@ -6,185 +5,165 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 
 const ORANGE = "#FF7A1A";
 
-const REPORT_CARDS = [
-  { id: "dv", label: "Domestic Violence", icon: "users" },
-  { id: "harassment", label: "Harassment", icon: "alert-triangle" },
-  { id: "cyber", label: "Cyber Crime", icon: "cpu" },
-  { id: "kidnapping", label: "Kidnapping", icon: "user-x" },
-  { id: "theft", label: "Theft", icon: "briefcase" },
-  { id: "missing", label: "Missing Person", icon: "search" },
-  { id: "weapon", label: "Weapon Violence", icon: "target" },
-  { id: "my_reports", label: "My Reports", icon: "file-text" },
-  { id: "status", label: "Report Status", icon: "help-circle" }, // 👈 "Other" -> Report Status
-];
-
 const ReportingHomeScreen = ({ navigation }) => {
-  const handleBack = () => navigation.goBack();
-
-  const handleCardPress = (card) => {
-    if (card.id === "status") {
-      navigation.navigate("ReportStatus");
-    } else if (card.id === "my_reports") {
-      // later you can make a separate MyReports screen
-      navigation.navigate("ReportStatus"); // or "MyReports"
-    } else {
-      navigation.navigate("CrimeReport", { category: card.label });
-    }
-  };
-
-  const handleHomePress = () => navigation.navigate("Home");
-
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backRow} onPress={handleBack}>
+        <TouchableOpacity
+          style={styles.backRow}
+          onPress={() => navigation.goBack()}
+        >
           <Icon name="arrow-left" size={20} color="#111" />
-          <Text style={styles.headerTitle}>
-            <Text style={styles.headerHighlight}> Reporting</Text>
-            <Text style={styles.headerDot}>Crime.</Text>
+          <Text style={styles.title}>
+            <Text style={styles.titleHighlight}> Reporting</Text>
+            <Text style={styles.titleNormal}>.</Text>
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* BODY */}
-      <ScrollView
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.cardsGrid}>
-          {REPORT_CARDS.map((card) => (
-            <TouchableOpacity
-              key={card.id}
-              style={styles.card}
-              onPress={() => handleCardPress(card)}
-            >
-              <View style={styles.cardIconWrapper}>
-                <Icon name={card.icon} size={22} color="#111" />
-              </View>
-              <Text style={styles.cardLabel}>{card.label}</Text>
-            </TouchableOpacity>
-          ))}
+      <View style={styles.body}>
+        <Text style={styles.subtitle}>Choose report type</Text>
+
+        <View style={styles.grid}>
+          {/* CRIME */}
+          <Card
+            icon="shield"
+            title="Crime Reporting"
+            desc="Report crimes safely"
+            onPress={() => navigation.navigate("CrimeReportingHome")}
+          />
+
+          {/* WASTE (same as home behavior) */}
+          <Card
+            icon="trash-2"
+            title="Waste Reporting"
+            desc="Garbage & sanitation"
+            onPress={() =>
+              navigation.navigate("MunicipalityReportCreate", {
+                category: "waste management",
+              })
+            }
+          />
+
+          {/* ROAD (same as home behavior) */}
+          <Card
+            icon="alert-circle"
+            title="Road Complaints"
+            desc="Potholes & hazards"
+            onPress={() =>
+              navigation.navigate("MunicipalityReportCreate", {
+                category: "road complaint",
+              })
+            }
+          />
         </View>
-      </ScrollView>
-
-      {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
-
-      {/* BOTTOM BAR */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-export default ReportingHomeScreen;
+const Card = ({ icon, title, desc, onPress }) => (
+  <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    <View style={styles.iconWrap}>
+      <Icon name={icon} size={20} color={ORANGE} />
+    </View>
+
+    <Text style={styles.cardTitle}>{title}</Text>
+    <Text style={styles.cardDesc}>{desc}</Text>
+
+    <View style={styles.cardArrow}>
+      <Icon name="arrow-right" size={16} color={ORANGE} />
+    </View>
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F4F4" },
+  container: { flex: 1, backgroundColor: "#F7F7F7" },
 
   header: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E3E3E3",
-  },
-  backRow: { flexDirection: "row", alignItems: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", marginLeft: 8 },
-  headerHighlight: { color: ORANGE },
-  headerDot: { color: "#111" },
-
-  body: { flex: 1 },
-  bodyContent: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 140,
+    backgroundColor: "#fff",
+    padding: 20,
   },
 
-  cardsGrid: {
+  backRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginLeft: 8,
+  },
+
+  titleHighlight: { color: ORANGE },
+  titleNormal: { color: "#111" },
+
+  body: {
+    padding: 16,
+  },
+
+  subtitle: {
+    textAlign: "center",
+    fontWeight: "700",
+    marginBottom: 20,
+    fontSize: 16,
+  },
+
+  grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
   },
+
   card: {
-    width: "47%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 18,
-    marginBottom: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    alignItems: "flex-start",
+    width: "48%",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    elevation: 3,
+    position: "relative",
   },
-  cardIconWrapper: {
-    width: 40,
-    height: 40,
+
+  iconWrap: {
+    backgroundColor: "#FFF3E8",
+    padding: 8,
     borderRadius: 20,
-    backgroundColor: "#FFF4E8",
-    alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "flex-start",
     marginBottom: 10,
   },
-  cardLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111",
+
+  cardTitle: {
+    fontWeight: "700",
+    fontSize: 14,
   },
 
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
+  cardDesc: {
+    fontSize: 12,
+    color: "#777",
+    marginTop: 4,
+    paddingRight: 14,
   },
 
-  bottomBar: {
+  cardArrow: {
     position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 10,
+    right: 12,
+    bottom: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFF3E8",
     alignItems: "center",
-    justifyContent: "space-between",
-    width: 220,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    justifyContent: "center",
   },
-  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
 });
+
+export default ReportingHomeScreen;

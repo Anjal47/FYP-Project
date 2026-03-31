@@ -1,72 +1,26 @@
+// controllers/counselingController.js
 const User = require("../models/User");
 const CounselingRequest = require("../models/CounselingRequest");
 const CounselingAppointment = require("../models/CounselingAppointment");
 
-// POST /api/counseling/requests
+/**
+ * Safe user id getter (supports req.user.id or req.user._id)
+ */
+const getAuthId = (req) => String(req?.user?._id || req?.user?.id || "");
+
+/**
+ * POST /api/counseling/requests
+ */
 exports.createCounselingRequest = async (req, res) => {
   try {
+    const userId = getAuthId(req);
     const { problem, age, gender, language, mode, description } = req.body;
 
     if (!problem || !age || !gender || !language || !mode) {
-      return res.status(400).json({ message: "problem, age, gender, language, mode are required" });
-    }
-
-    const nAge = Number(age);
-    if (!Number.isFinite(nAge) || nAge <= 0) {
-      return res.status(400).json({ message: "age must be a valid number" });
-    }
-
-    const doc = await CounselingRequest.create({
-      user: req.user._id,
-      problem: String(problem).trim(),
-      age: nAge,
-      gender,
-      language,
-      mode,
-      description: String(description || "").trim(),
-    });
-
-    return res.status(201).json({ ok: true, request: doc });
-  } catch (e) {
-    return res.status(500).json({ message: "Server error", error: e?.message });
-  }
-};
-
-// GET /api/counseling/counsellors
-exports.listCounsellors = async (req, res) => {
-  try {
-    const q = String(req.query.q || "").trim().toLowerCase();
-
-    const filter = {
-      role: "counsellor",
-      isActive: true,
-    };
-
-    if (q) {
-      filter.$or = [
-        { fullName: { $regex: q, $options: "i" } },
-        { workingArea: { $regex: q, $options: "i" } },
-        { qualification: { $regex: q, $options: "i" } },
-      ];
-    }
-
-    const counsellors = await User.find(filter)
-      .select("fullName email role bio qualification workingArea phone")
-      .sort({ createdAt: -1 });
-
-    return res.json({ ok: true, counsellors });
-  } catch (e) {
-    return res.status(500).json({ message: "Server error", error: e?.message });
-  }
-};
-
-// POST /api/counseling/requests
-exports.createCounselingRequest = async (req, res) => {
-  try {
-    const { problem, age, gender, language, mode, description } = req.body;
-
-    if (!problem || !age || !gender || !language || !mode) {
-      return res.status(400).json({ ok: false, message: "problem, age, gender, language, mode are required" });
+      return res.status(400).json({
+        ok: false,
+        message: "problem, age, gender, language, mode are required",
+      });
     }
 
     const nAge = Number(age);
@@ -75,7 +29,7 @@ exports.createCounselingRequest = async (req, res) => {
     }
 
     const doc = await CounselingRequest.create({
-      user: req.user._id,
+      user: userId,
       problem: String(problem).trim(),
       age: nAge,
       gender,
@@ -85,16 +39,21 @@ exports.createCounselingRequest = async (req, res) => {
       status: "Open",
     });
 
-    return res.status(201).json({ ok: true, request: { id: doc._id, status: doc.status } });
+    return res.status(201).json({
+      ok: true,
+      request: { _id: doc._id, id: doc._id, status: doc.status },
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, message: "Server error", error: e?.message });
   }
 };
 
-// GET /api/counseling/counsellors
+/**
+ * GET /api/counseling/counsellors
+ */
 exports.listCounsellors = async (req, res) => {
   try {
-    const q = String(req.query.q || "").trim().toLowerCase();
+    const q = String(req.query.q || "").trim();
 
     const filter = { role: "counsellor", isActive: true };
 
@@ -114,6 +73,7 @@ exports.listCounsellors = async (req, res) => {
       ok: true,
       counsellors: counsellors.map((c) => ({
         id: c._id,
+        _id: c._id,
         fullName: c.fullName,
         email: c.email,
         phone: c.phone || "",
@@ -127,22 +87,78 @@ exports.listCounsellors = async (req, res) => {
   }
 };
 
-// POST /api/counseling/appointments
+/**
+ * POST /api/counseling/appointments
+ * body: { counsellorId, requestId, month, day, slot, notes }
+ */
+// controllers/counselingController.js
+
+// controllers/counselingController.js
+
 exports.bookCounselingAppointment = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { counsellorId, requestId, month = "December", day, slot, notes = "" } = req.body;
+    const userId = getAuthId(req);
+    let { counsellorId, requestId, month = "December", day, slot, notes = "" } = req.body;
 
-    if (!counsellorId || !requestId || !day || !slot) {
-      return res.status(400).json({ ok: false, message: "counsellorId, requestId, day, slot required" });
+    // ✅ normalize so duplicates match exactly
+    month = String(month || "").trim();
+    slot = String(slot || "").trim();
+    day = Number(day);
+
+    if (!counsellorId || !requestId || !month || !day || !slot) {
+      return res.status(400).json({
+        ok: false,
+        message: "counsellorId, requestId, month, day, slot required",
+      });
     }
 
-    const counsellor = await User.findOne({ _id: counsellorId, role: "counsellor", isActive: true });
+    if (!Number.isFinite(day) || day < 1 || day > 31) {
+      return res.status(400).json({ ok: false, message: "day must be between 1 and 31" });
+    }
+
+    const counsellor = await User.findOne({
+      _id: counsellorId,
+      role: "counsellor",
+      isActive: true,
+    });
     if (!counsellor) return res.status(404).json({ ok: false, message: "Counsellor not found" });
 
     const reqDoc = await CounselingRequest.findOne({ _id: requestId, user: userId });
     if (!reqDoc) return res.status(404).json({ ok: false, message: "Counseling request not found" });
 
+    // ✅ RULE 1 CHECK: counsellor already booked at that slot?
+    const counsellorBusy = await CounselingAppointment.findOne({
+      counsellorId,
+      month,
+      day,
+      slot,
+      status: { $in: ["pending", "confirmed"] },
+    }).select("_id");
+
+    if (counsellorBusy) {
+      return res.status(409).json({
+        ok: false,
+        message: "That slot is already booked for this counsellor.",
+      });
+    }
+
+    // ✅ RULE 2 CHECK: user already has a booking at that slot?
+    const userBusy = await CounselingAppointment.findOne({
+      userId,
+      month,
+      day,
+      slot,
+      status: { $in: ["pending", "confirmed"] },
+    }).select("_id counsellorId");
+
+    if (userBusy) {
+      return res.status(409).json({
+        ok: false,
+        message: "You already have a session booked at this time. Please choose another slot.",
+      });
+    }
+
+    // ✅ create booking (DB unique indexes still protect against race conditions)
     const appt = await CounselingAppointment.create({
       userId,
       counsellorId,
@@ -154,42 +170,68 @@ exports.bookCounselingAppointment = async (req, res) => {
       status: "pending",
     });
 
-    // link counsellor into request + mark matched
     reqDoc.status = "Matched";
     reqDoc.counsellor = counsellorId;
     await reqDoc.save();
 
     return res.status(201).json({
       ok: true,
-      appointment: { id: appt._id, status: appt.status, month, day, slot },
+      appointment: {
+        _id: appt._id,
+        id: appt._id,
+        status: appt.status,
+        month,
+        day,
+        slot,
+      },
     });
   } catch (e) {
+    // ✅ If indexes block (duplicate key)
     if (e?.code === 11000) {
-      return res.status(409).json({ ok: false, message: "That slot is already booked for this counsellor." });
+      // Try to infer which index failed
+      const key = e?.keyPattern || {};
+      if (key.userId) {
+        return res.status(409).json({
+          ok: false,
+          message: "You already have a session booked at this time. Please choose another slot.",
+        });
+      }
+      return res.status(409).json({
+        ok: false,
+        message: "That slot is already booked for this counsellor.",
+      });
     }
+
     return res.status(500).json({ ok: false, message: "Failed to book appointment", error: e?.message });
   }
 };
 
-// GET /api/counseling/my/appointments (user)
+
+/**
+ * ✅ GET /api/counseling/appointments/mine  (USER)
+ */
 exports.getMyCounselingAppointments = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = getAuthId(req);
 
     const appts = await CounselingAppointment.find({ userId })
       .populate("counsellorId", "fullName email phone workingArea qualification")
+      .populate("requestId")
       .sort({ createdAt: -1 });
 
     return res.json({
       ok: true,
       appointments: appts.map((a) => ({
+        _id: a._id,
         id: a._id,
         month: a.month,
         day: a.day,
         slot: a.slot,
         status: a.status,
+        createdAt: a.createdAt,
         counsellor: a.counsellorId
           ? {
+              _id: a.counsellorId._id,
               id: a.counsellorId._id,
               fullName: a.counsellorId.fullName,
               email: a.counsellorId.email,
@@ -198,17 +240,20 @@ exports.getMyCounselingAppointments = async (req, res) => {
               qualification: a.counsellorId.qualification || "",
             }
           : null,
+        requestId: a.requestId || null,
       })),
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, message: "Failed to load your counselling bookings" });
+    return res.status(500).json({ ok: false, message: "Failed to load your counselling bookings", error: e?.message });
   }
 };
 
-// GET /api/counseling/counsellor/appointments (counsellor dashboard)
+/**
+ * ✅ GET /api/counseling/counsellor/appointments (COUNSELLOR)
+ */
 exports.getCounsellorAppointments = async (req, res) => {
   try {
-    const counsellorId = req.user.id;
+    const counsellorId = getAuthId(req);
 
     const appts = await CounselingAppointment.find({ counsellorId })
       .populate("userId", "fullName email phone")
@@ -218,11 +263,13 @@ exports.getCounsellorAppointments = async (req, res) => {
     return res.json({
       ok: true,
       appointments: appts.map((a) => ({
+        _id: a._id,
         id: a._id,
         status: a.status,
         month: a.month,
         day: a.day,
         slot: a.slot,
+        createdAt: a.createdAt,
         user: a.userId
           ? {
               id: a.userId._id,
@@ -245,14 +292,16 @@ exports.getCounsellorAppointments = async (req, res) => {
       })),
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, message: "Failed to load counsellor appointments" });
+    return res.status(500).json({ ok: false, message: "Failed to load counsellor appointments", error: e?.message });
   }
 };
 
-// PATCH /api/counseling/appointments/:id/confirm
+/**
+ * PATCH /api/counseling/appointments/:id/confirm
+ */
 exports.counsellorConfirmAppointment = async (req, res) => {
   try {
-    const counsellorId = req.user.id;
+    const counsellorId = getAuthId(req);
 
     const appt = await CounselingAppointment.findOne({ _id: req.params.id, counsellorId });
     if (!appt) return res.status(404).json({ ok: false, message: "Appointment not found" });
@@ -270,10 +319,12 @@ exports.counsellorConfirmAppointment = async (req, res) => {
   }
 };
 
-// PATCH /api/counseling/appointments/:id/decline
+/**
+ * PATCH /api/counseling/appointments/:id/decline
+ */
 exports.counsellorDeclineAppointment = async (req, res) => {
   try {
-    const counsellorId = req.user.id;
+    const counsellorId = getAuthId(req);
 
     const appt = await CounselingAppointment.findOne({ _id: req.params.id, counsellorId });
     if (!appt) return res.status(404).json({ ok: false, message: "Appointment not found" });

@@ -1,3 +1,7 @@
+// src/screens/TrafficReportScreen.jsx
+// ✅ Traffic report submit screen
+// ✅ Now shows Report Code after submit + button to jump to TrafficReportStatus (prefilled)
+
 import React, { useState } from "react";
 import {
   SafeAreaView,
@@ -6,32 +10,136 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const TrafficReportScreen = ({ navigation }) => {
+const ORANGE = "#FF7A1A";
+const BASE_URL = "http://10.0.2.2:5000";
+
+/* ----------------------------- API ----------------------------- */
+async function apiCreateReport(token, payload) {
+  const res = await fetch(`${BASE_URL}/api/reports`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
+  return data;
+}
+
+/* ----------------------------- Screen ----------------------------- */
+export default function TrafficReportScreen({ navigation }) {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const getToken = async () => AsyncStorage.getItem("token");
+
+  const handleBack = () => navigation?.goBack?.();
+  const handleHomePress = () => navigation.navigate("Home");
+
+  // ✅ Extract report code from different possible backend response shapes
+  const pickReportCode = (resp) => {
+    return (
+      resp?.reportCode ||
+      resp?.code ||
+      resp?.data?.reportCode ||
+      resp?.data?.code ||
+      resp?.report?.reportCode ||
+      resp?.report?.code ||
+      resp?.report?.id ||
+      resp?.report?._id ||
+      resp?.id ||
+      resp?._id ||
+      null
+    );
+  };
+
+  const resetForm = () => {
+    setDescription("");
+    setLocation("");
+  };
+
+  const onSubmit = async () => {
+    try {
+      const d = description.trim();
+      const l = location.trim();
+
+      if (!d) return Alert.alert("Missing", "Please enter description.");
+      if (!l) return Alert.alert("Missing", "Please add location / area.");
+
+      setSubmitting(true);
+
+      const token = await getToken();
+      if (!token) {
+        setSubmitting(false);
+        return Alert.alert("Login required", "Token not found. Please login again.");
+      }
+
+      // ✅ Traffic report payload
+      const payload = {
+        type: "Traffic",
+        area: l,
+        description: d,
+        priority: "Medium",
+      };
+
+      // ✅ Capture backend response to get report code
+      const resp = await apiCreateReport(token, payload);
+      const reportCode = pickReportCode(resp) || "N/A";
+
+      Alert.alert(
+        "Submitted ✅",
+        `Traffic report sent successfully.\n\nReport Code: ${reportCode}\n\n(Use this code to track status)`,
+        [
+          {
+            text: "Check Status",
+            onPress: () => {
+              resetForm();
+              // ✅ Go to Traffic report status screen + prefill
+              navigation.navigate("TrafficReportStatus", { reportCode });
+            },
+          },
+          {
+            text: "OK",
+            style: "cancel",
+            onPress: () => {
+              resetForm();
+              handleBack();
+            },
+          },
+        ]
+      );
+    } catch (e) {
+      Alert.alert("Error", e?.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backRow}
-          onPress={() => navigation?.goBack?.()}
-        >
+        <TouchableOpacity style={styles.backRow} onPress={handleBack}>
           <Icon name="arrow-left" size={20} color="#111" />
           <Text style={styles.title}>
             <Text style={styles.titleHighlight}> Traffic</Text>
-            <Text style={styles.titleNormal}>Violence.</Text>
+            <Text style={styles.titleNormal}>Report.</Text>
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* BODY */}
       <View style={styles.body}>
-        {/* Description box */}
         <TextInput
           style={styles.descriptionInput}
           placeholder="Enter Description..."
@@ -41,7 +149,6 @@ const TrafficReportScreen = ({ navigation }) => {
           onChangeText={setDescription}
         />
 
-        {/* Location label + box */}
         <Text style={styles.locationLabel}>Add Location</Text>
         <TextInput
           style={styles.locationBox}
@@ -52,44 +159,56 @@ const TrafficReportScreen = ({ navigation }) => {
           onChangeText={setLocation}
         />
 
-        {/* Media options */}
         <View style={styles.mediaRow}>
-          <MediaButton label="Image" onPress={() => {}} />
-          <MediaButton label="Audio" onPress={() => {}} />
-          <MediaButton label="Video" onPress={() => {}} />
+          <MediaButton label="Image" onPress={() => Alert.alert("Later", "Image upload next step")} />
+          <MediaButton label="Audio" onPress={() => Alert.alert("Later", "Audio upload next step")} />
+          <MediaButton label="Video" onPress={() => Alert.alert("Later", "Video upload next step")} />
         </View>
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={onSubmit}
+          disabled={submitting}
+          style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+        >
+          {submitting ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.submitTxt}>Submitting…</Text>
+            </View>
+          ) : (
+            <Text style={styles.submitTxt}>Submit Report</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Optional: small hint below button */}
+        <Text style={styles.hint}>
+          After submission, you’ll receive a Report Code to track your traffic report status.
+        </Text>
       </View>
 
       {/* ORANGE SIDE PILL */}
       <View style={styles.sidePill} />
 
       {/* BOTTOM TABS */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
+
     </SafeAreaView>
   );
-};
+}
 
-const MediaButton = ({ label, onPress }) => (
-  <TouchableOpacity style={styles.mediaButton} onPress={onPress}>
-    <Text style={styles.mediaLabel}>{label}</Text>
-  </TouchableOpacity>
-);
+/* ----------------------------- Components ----------------------------- */
+function MediaButton({ label, onPress }) {
+  return (
+    <TouchableOpacity style={styles.mediaButton} onPress={onPress} activeOpacity={0.9}>
+      <Text style={styles.mediaLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
 
+/* ----------------------------- Styles ----------------------------- */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F4F4F4",
-  },
+  container: { flex: 1, backgroundColor: "#F4F4F4" },
+
   header: {
     paddingHorizontal: 24,
     paddingTop: 8,
@@ -98,28 +217,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: "#E3E3E3",
   },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  titleHighlight: {
-    color: "#FF7A1A",
-  },
-  titleNormal: {
-    color: "#111",
-  },
+  backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  title: { fontSize: 20, fontWeight: "700" },
+  titleHighlight: { color: ORANGE },
+  titleNormal: { color: "#111" },
 
-  /* BODY LAYOUT */
-  body: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-  },
+  body: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
 
   descriptionInput: {
     backgroundColor: "#FFFFFF",
@@ -133,15 +236,12 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
-    marginBottom: 26, // more gap before "Add Location"
+    marginBottom: 26,
+    minHeight: 120,
+    textAlignVertical: "top",
   },
 
-  locationLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111",
-    marginBottom: 10, // small gap above the big box
-  },
+  locationLabel: { fontSize: 15, fontWeight: "600", color: "#111", marginBottom: 10 },
 
   locationBox: {
     backgroundColor: "#FFFFFF",
@@ -150,21 +250,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: "#111",
-    minHeight: 140, // bigger like the mockup
+    minHeight: 140,
     textAlignVertical: "top",
     shadowColor: "#000",
     shadowOpacity: 0.12,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
-    marginBottom: 28, // good breathing room before media row
+    marginBottom: 28,
   },
 
-  mediaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
+  mediaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
 
   mediaButton: {
     width: "30%",
@@ -172,17 +268,37 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14, // slightly taller, feels less cramped
+    paddingVertical: 14,
     shadowColor: "#000",
     shadowOpacity: 0.12,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  mediaLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111",
+  mediaLabel: { fontSize: 13, fontWeight: "600", color: "#111" },
+
+  submitBtn: {
+    marginTop: 6,
+    backgroundColor: ORANGE,
+    borderRadius: 18,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  submitTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+
+  hint: {
+    marginTop: 10,
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#777",
+    paddingHorizontal: 10,
   },
 
   sidePill: {
@@ -191,15 +307,12 @@ const styles = StyleSheet.create({
     bottom: 110,
     width: 56,
     height: 110,
-    backgroundColor: "#FF7A1A",
+    backgroundColor: ORANGE,
     borderTopLeftRadius: 40,
     borderBottomLeftRadius: 40,
     elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
   },
+
   bottomBar: {
     position: "absolute",
     bottom: 24,
@@ -213,15 +326,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     width: 220,
     elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
   },
-  tabItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
+  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
 });
-
-export default TrafficReportScreen;

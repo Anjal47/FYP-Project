@@ -21,6 +21,7 @@ function routeByRole(role) {
   if (role === "counsellor") return "CounsellorHome";
   if (role === "therapist") return "TherapistHome";
   if (role === "police") return "PoliceHome";
+   if (role === "municipality") return "MunicipalityWasteDashboard";
   return "Home";
 }
 

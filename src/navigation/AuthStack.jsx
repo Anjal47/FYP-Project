@@ -14,7 +14,7 @@ import ForgotPasswordScreen from "../screens/ForgotPasswordScreen";
 import HomeScreen from "../screens/HomeScreen";
 import CounselingScreen from "../screens/CounselingScreen";
 import CounselingFormScreen from "../screens/CounselingFormScreen";
-import CounselorsScreen from "../screens/CounselorsScreen";
+import BookCounseling from "../screens/BookCounselingScreen";
 import TherapyScreen from "../screens/TherapyScreen";
 import BookTherapyScreen from "../screens/BookTherapyScreen";
 
@@ -37,12 +37,28 @@ import CounsellorClientsScreen from "../screens/Counsellor/CounsellorClientsScre
 /* -------------------- THERAPIST SCREENS (adjust paths) -------------------- */
 import TherapistHomeScreen from "../screens/Therapist/TherapistHomeScreen";
 
+import CounsellorChatScreen from "../screens/Counsellor/CounsellorChatScreen";
 /* -------------------- POLICE SCREENS (adjust paths) -------------------- */
 import PoliceHomeScreen from "../screens/Police/PoliceHomeScreen";
 
 /* -------------------- ADMIN (Tabs) -------------------- */
 import AdminTabs from "./AdminTabs"; // create this file in src/navigation/AdminTabs.jsx
 import ProfileScreen from "../screens/ProfileScreen";
+import CounsellorAppointmentsScreen from "../screens/Counsellor/CounsellorAppointmentsScreen";
+import UserBookedCounselingScreen from "../screens/UserBookedCounselingScreen";
+import TrafficReportStatusScreen from "../screens/TrafficReportStatusScreen";
+import WasteHomeScreen from "../screens/WasteHomeScreen";
+import WasteReportScreen from "../screens/WasteReportScreen";
+import WasteReportStatusScreen from "../screens/WasteReportsStatusScreen";
+import MunicipalityWasteDashboardScreen from "../screens/Waste/MunicipalityWasteDashboardScreen";
+import MunicipalityReportCreateScreen from "../screens/MunicipalityReportCreateScreen";
+import CounselingChatScreen from "../screens/CounselingChatScreen";
+import TherapyChatScreen from "../screens/TherapyChatScreen";
+import TherapistChatScreen from "../screens/Therapist/TherapistChatScreen";
+import FinePaymentScreen from "../Traffic/FinePaymentScreen";
+import CrimeReportingHomeScreen from "../screens/CrimeReportHomeScreen";
+import DonationScreen from "../screens/Donation/DonationScreen";
+
 
 const Stack = createNativeStackNavigator();
 
@@ -107,7 +123,15 @@ export default function AuthStack() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Counseling" component={CounselingScreen} />
         <Stack.Screen name="CounselingForm" component={CounselingFormScreen} />
-        <Stack.Screen name="Counselors" component={CounelorsScreenFix} />
+        <Stack.Screen name="Counselors" component={BookCounseling} />
+        <Stack.Screen name="UserBookedCounseling" component={UserBookedCounselingScreen} />
+
+<Stack.Screen
+  name="TrafficReportStatus"
+  component={TrafficReportStatusScreen}
+  options={{ headerShown: false }}
+/>
+
         <Stack.Screen name="TherapyScreen" component={TherapyScreen} />
         <Stack.Screen name="BookTherapyScreen" component={BookTherapyScreen} />
         <Stack.Screen name="TrafficHome" component={TrafficHomeScreen} />
@@ -120,17 +144,37 @@ export default function AuthStack() {
         <Stack.Screen name="ConnectToNGOs" component={ConnectToNGOsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="CounselingChat" component={CounselingChatScreen} />
+        <Stack.Screen name="TherapyChat" component={TherapyChatScreen} />
+        <Stack.Screen name="FinePayment" component={FinePaymentScreen} />
+        <Stack.Screen name="CrimeReportingHome" component={CrimeReportingHomeScreen} />
+        <Stack.Screen name="Donation" component={DonationScreen} />
+
+
+<Stack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
+<Stack.Screen name="TherapistChat" component={TherapistChatScreen} />
+
 
         {/* COUNSELLOR */}
         <Stack.Screen name="CounsellorHome" component={CounsellorHomeScreen} />
         <Stack.Screen name="CounsellorClients" component={CounsellorClientsScreen} />
-          <Stack.Screen name="CounsellorAppointments" component={CounsellorAppointments} />
+          <Stack.Screen name="CounsellorAppointments" component={CounsellorAppointmentsScreen} />
 
         {/* THERAPIST */}
         <Stack.Screen name="TherapistHome" component={TherapistHomeScreen} />
 
         {/* POLICE */}
         <Stack.Screen name="PoliceHome" component={PoliceHomeScreen} />
+         <Stack.Screen name="MunicipalityReportCreate" component={MunicipalityReportCreateScreen} />
+
+  <Stack.Screen
+    name="MunicipalityWasteDashboard"
+    component={MunicipalityWasteDashboardScreen}
+  />
+        <Stack.Screen name="WasteHome" component={WasteHomeScreen} options={{ headerShown: false }} />
+<Stack.Screen name="WasteReport" component={WasteReportScreen} options={{ headerShown: false }} />
+<Stack.Screen name="WasteReportStatus" component={WasteReportStatusScreen} options={{ headerShown: false }} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

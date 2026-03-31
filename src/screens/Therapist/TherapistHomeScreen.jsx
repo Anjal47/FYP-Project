@@ -1,4 +1,4 @@
-// src/screens/TherapistHomeScreen.jsx
+// src/screens/therapist/TherapistHomeScreen.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
@@ -13,9 +13,13 @@ import {
   RefreshControl,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import Feather from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BASE_URL = "http://10.0.2.2:5000";
+
+const ORANGE = "#FF7A1A";
+const BG = "#F4F4F4";
 
 /* ----------------------------- API Helpers ----------------------------- */
 
@@ -24,9 +28,6 @@ const BASE_URL = "http://10.0.2.2:5000";
  * @returns {Promise<any>}
  */
 async function apiGetTherapistAppointments(token) {
-  // ✅ backend should return therapist's appointments (pending/confirmed/etc)
-  // You can implement this endpoint as:
-  // GET /api/therapy/therapist/appointments
   const res = await fetch(`${BASE_URL}/api/therapy/therapist/appointments`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -66,24 +67,23 @@ async function apiDeclineAppointment(token, appointmentId) {
 /* --------------------------- Therapist Home --------------------------- */
 
 /**
- * TherapistHomeScreen
- * Real API-connected therapist dashboard:
- * - Loads therapist appointments
- * - Therapist can confirm/decline pending appointments
- * - Shows statuses: pending/confirmed/cancelled/completed
- *
- * Soft, safe, professional — with a tiny rainbow wink 🌈🫶
+ * TherapistHomeScreen (Light Theme)
+ * ✅ White + Orange theme (same vibe as counsellor)
+ * ✅ Loads therapist appointments
+ * ✅ Therapist can confirm / decline pending requests
+ * ✅ Chat button appears ONLY when: status=confirmed AND mode=online
+ * ✅ Chat navigation: TherapistChat (you add this route)
+ * ✅ Logout button (clears token + resets to Login)
  */
 export default function TherapistHomeScreen({ navigation }) {
   const UI = useMemo(
     () => ({
-      bg: "#0B0F14",
-      card: "#111826",
-      card2: "#0F172A",
-      text: "#EAF0FF",
-      mut: "rgba(234,240,255,0.68)",
-      line: "rgba(255,255,255,0.08)",
-      accent: "#7C3AED",
+      bg: BG,
+      card: "#FFFFFF",
+      text: "#111",
+      mut: "#777",
+      line: "#E3E3E3",
+      orange: ORANGE,
       calm: "#22C55E",
       warn: "#F59E0B",
       danger: "#EF4444",
@@ -92,44 +92,55 @@ export default function TherapistHomeScreen({ navigation }) {
   );
 
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("Requests"); // Today | Requests | Confirmed | All
+  const [tab, setTab] = useState("Requests"); // Requests | Confirmed | All
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  /**
-   * appointments: unified list
-   * shape expected from backend (recommended):
-   * {
-   *   id, status, month, day, slot,
-   *   user: { id, fullName, email, phone },
-   *   request: { id, problem, age, gender, language, mode, description }
-   * }
-   */
   const [appointments, setAppointments] = useState([]);
 
   const badgeTone = (status) => {
-    if (status === "confirmed") return UI.calm;
-    if (status === "pending") return UI.warn;
-    if (status === "cancelled") return UI.danger;
-    if (status === "completed") return UI.calm;
+    const s = String(status || "").toLowerCase();
+    if (s === "confirmed") return UI.calm;
+    if (s === "pending") return UI.warn;
+    if (s === "cancelled") return UI.danger;
+    if (s === "completed") return UI.calm;
     return UI.mut;
   };
 
   const statusLabel = (status) => {
-    if (status === "pending") return "PENDING";
-    if (status === "confirmed") return "CONFIRMED";
-    if (status === "cancelled") return "DECLINED";
-    if (status === "completed") return "COMPLETED";
+    const s = String(status || "").toLowerCase();
+    if (s === "pending") return "PENDING";
+    if (s === "confirmed") return "CONFIRMED";
+    if (s === "cancelled") return "DECLINED";
+    if (s === "completed") return "COMPLETED";
     return String(status || "").toUpperCase();
   };
 
-  const safeNavLogin = () => {
-    navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+  const safeNavLogin = () => navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+
+  /** ✅ Logout (clear token + reset nav) */
+  const logout = () => {
+    Alert.alert("Log out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // remove auth + any user cache if you store it
+            await AsyncStorage.multiRemove(["token", "user"]);
+          } catch (e) {
+            // ignore remove errors, still leave the screen
+          } finally {
+            safeNavLogin();
+          }
+        },
+      },
+    ]);
   };
 
   const load = async (opts = { silent: false }) => {
     const silent = !!opts?.silent;
-
     try {
       if (!silent) setLoading(true);
 
@@ -146,9 +157,7 @@ export default function TherapistHomeScreen({ navigation }) {
   };
 
   useEffect(() => {
-    const unsub = navigation.addListener("focus", () => {
-      load({ silent: false });
-    });
+    const unsub = navigation.addListener("focus", () => load({ silent: false }));
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation]);
@@ -174,9 +183,8 @@ export default function TherapistHomeScreen({ navigation }) {
 
             await apiConfirmAppointment(token, appointmentId);
 
-            // Optimistic UI update
             setAppointments((prev) =>
-              prev.map((a) => (a.id === appointmentId ? { ...a, status: "confirmed" } : a))
+              prev.map((a) => (String(a.id) === String(appointmentId) ? { ...a, status: "confirmed" } : a))
             );
           } catch (e) {
             Alert.alert("Confirm failed", e?.message || "Could not confirm");
@@ -199,9 +207,8 @@ export default function TherapistHomeScreen({ navigation }) {
 
             await apiDeclineAppointment(token, appointmentId);
 
-            // Optimistic UI update
             setAppointments((prev) =>
-              prev.map((a) => (a.id === appointmentId ? { ...a, status: "cancelled" } : a))
+              prev.map((a) => (String(a.id) === String(appointmentId) ? { ...a, status: "cancelled" } : a))
             );
           } catch (e) {
             Alert.alert("Decline failed", e?.message || "Could not decline");
@@ -211,14 +218,26 @@ export default function TherapistHomeScreen({ navigation }) {
     ]);
   };
 
+  /**
+   * ✅ Chat unlock rule
+   * Show chat only if:
+   *  - status confirmed
+   *  - request.mode === "online" (case-insensitive)
+   */
+  const canChat = (appt) => {
+    const status = String(appt?.status || "").toLowerCase();
+    const mode = String(appt?.request?.mode || appt?.mode || "").toLowerCase();
+    return status === "confirmed" && mode === "online";
+  };
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     const byTab = (a) => {
-      if (tab === "Today") return a.status === "confirmed"; // treat "Today" as confirmed sessions for now
-      if (tab === "Requests") return a.status === "pending";
-      if (tab === "Confirmed") return a.status === "confirmed";
-      return true; // All
+      const s = String(a?.status || "").toLowerCase();
+      if (tab === "Requests") return s === "pending";
+      if (tab === "Confirmed") return s === "confirmed";
+      return true;
     };
 
     const bySearch = (a) => {
@@ -247,140 +266,141 @@ export default function TherapistHomeScreen({ navigation }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={[s.safe, { backgroundColor: UI.bg }]}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={UI.accent} />
-          <Text style={{ marginTop: 10, color: UI.mut, fontWeight: "900" }}>Loading Therapist Hub…</Text>
+      <SafeAreaView style={[s.container, { backgroundColor: UI.bg }]}>
+        <View style={s.loadingBox}>
+          <ActivityIndicator size="large" color={UI.orange} />
+          <Text style={[s.loadingTxt, { color: UI.mut }]}>Loading Therapist Hub…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[s.safe, { backgroundColor: UI.bg }]}>
+    <SafeAreaView style={[s.container, { backgroundColor: UI.bg }]}>
       <ScrollView
         contentContainerStyle={s.page}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={UI.text} />}
       >
         {/* Header */}
-        <View style={s.header}>
-          <View>
-            <Text style={[s.title, { color: UI.text }]}>
-              Therapist <Text style={{ color: UI.accent, fontWeight: "900" }}>Hub</Text>
-            </Text>
-            <Text style={[s.sub, { color: UI.mut }]}>
-              Review bookings, confirm sessions, and keep things calm. 🌈🫶
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[s.roundBtn, { borderColor: UI.line }]}
-            onPress={() => navigation.navigate("Settings")}
-          >
-            <Ionicons name="settings-outline" size={22} color={UI.text} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Search */}
-        <View style={[s.searchBox, { borderColor: UI.line, backgroundColor: UI.card }]}>
-          <Ionicons name="search-outline" size={18} color={UI.mut} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search client, problem, slot, status…"
-            placeholderTextColor="rgba(234,240,255,0.45)"
-            style={[s.searchInput, { color: UI.text }]}
-          />
-          {!!search && (
-            <TouchableOpacity onPress={() => setSearch("")} style={s.clearBtn}>
-              <Ionicons name="close-circle" size={20} color={UI.mut} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Tabs */}
-        <View style={s.tabs}>
-          {["Requests", "Confirmed", "All"].map((t) => (
-            <TouchableOpacity
-              key={t}
-              activeOpacity={0.9}
-              onPress={() => setTab(t)}
-              style={[
-                s.tabChip,
-                {
-                  borderColor: UI.line,
-                  backgroundColor: tab === t ? UI.card2 : UI.card,
-                },
-              ]}
-            >
-              <Text style={{ color: tab === t ? UI.text : UI.mut, fontWeight: "900", fontSize: 12 }}>
-                {t}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Content */}
-        <View style={[s.section, { borderColor: UI.line, backgroundColor: UI.card }]}>
-          <View style={s.sectionTop}>
-            <Text style={[s.sectionTitle, { color: UI.text }]}>
-              {tab === "Requests" ? "Pending Requests" : tab === "Confirmed" ? "Confirmed Sessions" : "All Appointments"}
+        <View style={[s.headerCard, shadow]}>
+          <View style={s.headerRow}>
+            <Text style={s.title}>
+              <Text style={s.titleAccent}>Therapist</Text>
+              <Text style={s.titleMain}>Hub.</Text>
             </Text>
 
-            <View style={[s.countPill, { borderColor: UI.line }]}>
-              <Ionicons name="albums-outline" size={14} color={UI.mut} />
-              <Text style={[s.countTxt, { color: UI.mut }]}>{filtered.length}</Text>
+            {/* ✅ Right actions: Refresh + Logout */}
+            <View style={s.headerActions}>
+              <TouchableOpacity activeOpacity={0.9} style={s.refreshBtn} onPress={onRefresh}>
+                {refreshing ? (
+                  <ActivityIndicator color="#111" />
+                ) : (
+                  <Feather name="refresh-cw" size={18} color="#111" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.9} style={s.logoutBtn} onPress={logout}>
+                <Ionicons name="log-out-outline" size={18} color="#111" />
+              </TouchableOpacity>
             </View>
           </View>
 
+          <Text style={s.miniHint}>
+            Confirm sessions, view details, and chat only for{" "}
+            <Text style={{ color: ORANGE, fontWeight: "900" }}>Online + Confirmed</Text>.
+          </Text>
+
+          {/* Search */}
+          <View style={s.searchRow}>
+            <View style={s.searchBar}>
+              <Feather name="search" size={16} color="#9A9A9A" />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Search client, problem, mode, slot..."
+                placeholderTextColor="#9A9A9A"
+                style={s.searchInput}
+              />
+              {!!search && (
+                <TouchableOpacity activeOpacity={0.8} onPress={() => setSearch("")} style={s.clearBtn}>
+                  <Feather name="x" size={16} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Tabs */}
+          <View style={s.tabsRow}>
+            {["Requests", "Confirmed", "All"].map((t) => {
+              const active = tab === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  activeOpacity={0.9}
+                  onPress={() => setTab(t)}
+                  style={[s.tabChip, active ? { backgroundColor: "#FFF4E8", borderColor: "#FFD8BA" } : null]}
+                >
+                  <Text style={[s.tabTxt, active ? { color: ORANGE } : null]}>{t}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Content */}
+        <View style={{ marginTop: 14 }}>
           {filtered.length === 0 ? (
-            <EmptyState UI={UI} text="Nothing to show here. That’s a peaceful vibe." />
+            <View style={[s.emptyCard, shadow]}>
+              <Text style={s.emptyTitle}>No appointments found</Text>
+              <Text style={s.emptySub}>Try refresh or change the tab.</Text>
+            </View>
           ) : (
             filtered.map((a) => {
-              const status = a?.status || "pending";
+              const status = String(a?.status || "pending").toLowerCase();
               const tone = badgeTone(status);
 
               const clientName = a?.user?.fullName || "Client";
               const problem = a?.request?.problem || "Therapy";
               const mode = a?.request?.mode || "Session";
               const language = a?.request?.language || "";
-              const age = a?.request?.age ? `Age ${a.request.age}` : "";
-              const when = `${a?.month || "Month"} ${a?.day || ""} • ${a?.slot || ""}`;
+              const when = `${a?.month || ""} ${a?.day || ""} • ${a?.slot || ""}`.trim();
+
+              const chatAllowed = canChat(a);
 
               return (
-                <View key={a.id} style={[s.card, { borderColor: UI.line, backgroundColor: UI.card2 }]}>
-                  <View style={s.rowTop}>
-                    <Text style={[s.id, { color: UI.text }]}>{String(a.id).slice(-6).toUpperCase()}</Text>
+                <View key={a.id} style={[s.card, shadow]}>
+                  <View style={s.topRow}>
+                    <View>
+                      <Text style={s.name}>{clientName}</Text>
+                      <Text style={s.problem}>{problem}</Text>
+                    </View>
 
-                    <View style={[s.badge, { borderColor: tone }]}>
+                    <View style={[s.statusPill, { borderColor: tone }]}>
                       <View style={[s.dot, { backgroundColor: tone }]} />
-                      <Text style={[s.badgeTxt, { color: tone }]}>{statusLabel(status)}</Text>
+                      <Text style={[s.statusTxt, { color: tone }]}>{statusLabel(status)}</Text>
                     </View>
                   </View>
 
-                  <Text style={[s.big, { color: UI.text }]}>{clientName}</Text>
-                  <Text style={[s.small, { color: UI.mut }]}>{problem}</Text>
+                  {!!when && (
+                    <View style={s.rowLine}>
+                      <Feather name="calendar" size={14} color={ORANGE} />
+                      <Text style={s.rowText}>{when}</Text>
+                    </View>
+                  )}
 
-                  <View style={s.metaRow}>
-                    <Ionicons name="calendar-outline" size={14} color={UI.mut} />
-                    <Text style={[s.metaTxt, { color: UI.mut }]}>{when}</Text>
-                  </View>
-
-                  <View style={s.metaRow}>
-                    <Ionicons name="sparkles-outline" size={14} color={UI.mut} />
-                    <Text style={[s.metaTxt, { color: UI.mut }]}>
-                      {mode}
+                  <View style={s.rowLine}>
+                    <Feather name="activity" size={14} color={ORANGE} />
+                    <Text style={s.rowText}>
+                      {String(mode || "").toUpperCase()}
                       {!!language ? ` • ${language}` : ""}
-                      {!!age ? ` • ${age}` : ""}
                     </Text>
                   </View>
 
                   {!!a?.request?.description && (
-                    <View style={[s.noteBox, { borderColor: UI.line }]}>
-                      <Ionicons name="chatbox-ellipses-outline" size={14} color={UI.mut} />
-                      <Text style={[s.noteTxt, { color: UI.mut }]} numberOfLines={3}>
+                    <View style={s.descBox}>
+                      <Text style={s.descTitle}>Client Notes</Text>
+                      <Text style={s.descText} numberOfLines={4}>
                         {a.request.description}
                       </Text>
                     </View>
@@ -389,52 +409,60 @@ export default function TherapistHomeScreen({ navigation }) {
                   {/* Actions */}
                   {status === "pending" ? (
                     <View style={s.actionsRow}>
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        style={[s.actionBtn, { borderColor: UI.line }]}
-                        onPress={() => confirm(a.id)}
-                      >
+                      <TouchableOpacity activeOpacity={0.9} style={s.actionBtn} onPress={() => confirm(a.id)}>
                         <Ionicons name="checkmark-outline" size={18} color={UI.calm} />
-                        <Text style={[s.actionTxt, { color: UI.text }]}>Confirm</Text>
+                        <Text style={s.actionTxt}>Confirm</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        style={[s.actionBtn, { borderColor: UI.line }]}
-                        onPress={() => decline(a.id)}
-                      >
+                      <TouchableOpacity activeOpacity={0.9} style={s.actionBtn} onPress={() => decline(a.id)}>
                         <Ionicons name="close-outline" size={18} color={UI.danger} />
-                        <Text style={[s.actionTxt, { color: UI.text }]}>Decline</Text>
+                        <Text style={s.actionTxt}>Decline</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        style={[s.actionBtn, { borderColor: UI.line }]}
-                        onPress={() => Alert.alert("Open Chat", "Connect this to your therapist chat screen.")}
-                      >
-                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={UI.text} />
-                        <Text style={[s.actionTxt, { color: UI.text }]}>Chat</Text>
-                      </TouchableOpacity>
+                      {/* Chat locked on pending */}
+                      <View style={[s.actionBtn, { opacity: 0.45 }]}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#111" />
+                        <Text style={s.actionTxt}>Chat</Text>
+                      </View>
                     </View>
                   ) : (
                     <View style={s.actionsRow}>
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        style={[s.actionBtn, { borderColor: UI.line }]}
-                        onPress={() => Alert.alert("Open Chat", "Connect this to your therapist chat screen.")}
-                      >
-                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={UI.text} />
-                        <Text style={[s.actionTxt, { color: UI.text }]}>Chat</Text>
-                      </TouchableOpacity>
+                      {/* ✅ Chat shows only when confirmed + online */}
+                      {chatAllowed ? (
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          style={s.actionBtn}
+                          onPress={() =>
+                            navigation.navigate("TherapistChat", {
+                              appointmentId: String(a.id),
+                              clientName: clientName,
+                            })
+                          }
+                        >
+                          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#111" />
+                          <Text style={s.actionTxt}>Chat</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={[s.actionBtn, { opacity: 0.45 }]}>
+                          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#111" />
+                          <Text style={s.actionTxt}>Chat</Text>
+                        </View>
+                      )}
 
                       <TouchableOpacity
                         activeOpacity={0.9}
-                        style={[s.actionBtn, { borderColor: UI.line }]}
+                        style={s.actionBtn}
                         onPress={() => Alert.alert("Details", "You can navigate to a details screen here.")}
                       >
-                        <Ionicons name="information-circle-outline" size={16} color={UI.accent} />
-                        <Text style={[s.actionTxt, { color: UI.text }]}>Details</Text>
+                        <Ionicons name="person-outline" size={18} color="#111" />
+                        <Text style={s.actionTxt}>Details</Text>
                       </TouchableOpacity>
+
+                      {!chatAllowed && (
+                        <Text style={s.lockHint}>
+                          Chat unlocks only for <Text style={{ fontWeight: "900" }}>Online + Confirmed</Text>.
+                        </Text>
+                      )}
                     </View>
                   )}
                 </View>
@@ -443,93 +471,163 @@ export default function TherapistHomeScreen({ navigation }) {
           )}
         </View>
 
-        <Text style={[s.footer, { color: UI.mut }]}>
-          API used: GET /api/therapy/therapist/appointments, PATCH /api/therapy/appointments/:id/confirm|decline 🫶
-        </Text>
+        <Text style={s.footerNote}>API: GET /api/therapy/therapist/appointments • PATCH confirm/decline</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ------------------------------ Empty State ------------------------------ */
-
-function EmptyState({ UI, text }) {
-  return (
-    <View style={[s.empty, { borderColor: UI.line }]}>
-      <Ionicons name="sparkles-outline" size={20} color={UI.accent} />
-      <Text style={[s.emptyTxt, { color: UI.mut }]}>{text}</Text>
-    </View>
-  );
-}
-
-/* --------------------------------- Styles -------------------------------- */
+const shadow = {
+  shadowColor: "#000",
+  shadowOpacity: 0.12,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 5,
+};
 
 const s = StyleSheet.create({
-  safe: { flex: 1 },
-  page: { padding: 16, paddingBottom: 26 },
+  container: { flex: 1, backgroundColor: BG },
+  page: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 26 },
 
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  title: { fontSize: 22, fontWeight: "900" },
-  sub: { marginTop: 4, fontSize: 13, lineHeight: 18 },
+  headerCard: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderRadius: 24,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
 
-  roundBtn: { width: 42, height: 42, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  /* ✅ NEW: action wrapper on the right */
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
 
-  searchBox: {
+  refreshBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: "#EFEFEF",
+  },
+
+  /* ✅ NEW: logout button (orange-ish vibe) */
+  logoutBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#FFF4E8",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFD8BA",
+  },
+
+  title: { fontSize: 24, fontWeight: "900" },
+  titleAccent: { color: ORANGE, fontWeight: "900" },
+  titleMain: { color: "#111", fontWeight: "900" },
+
+  miniHint: { marginTop: 2, fontSize: 12, color: "#777", fontWeight: "700" },
+
+  searchRow: { marginTop: 12 },
+  searchBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 10,
-  },
-  searchInput: { flex: 1, fontSize: 13 },
-  clearBtn: { padding: 2 },
-
-  tabs: { flexDirection: "row", gap: 10, marginBottom: 14, flexWrap: "wrap" },
-  tabChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-
-  section: { borderWidth: 1, borderRadius: 18, padding: 14 },
-  sectionTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  sectionTitle: { fontSize: 14, fontWeight: "900" },
-
-  countPill: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  countTxt: { fontSize: 12, fontWeight: "900" },
-
-  empty: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 },
-  emptyTxt: { fontSize: 12, fontWeight: "700" },
-
-  card: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 10 },
-
-  rowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  id: { fontSize: 12, fontWeight: "900" },
-
-  big: { marginTop: 8, fontSize: 14, fontWeight: "900" },
-  small: { marginTop: 4, fontSize: 12, fontWeight: "700" },
-
-  metaRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  metaTxt: { fontSize: 12, fontWeight: "700" },
-
-  badge: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
-  badgeTxt: { fontSize: 11, fontWeight: "900" },
-  dot: { width: 9, height: 9, borderRadius: 99 },
-
-  noteBox: {
-    marginTop: 10,
+    backgroundColor: "#F2F2F2",
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 10,
+    borderColor: "#E3E3E3",
+    borderRadius: 22,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
   },
-  noteTxt: { flex: 1, fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  searchInput: { flex: 1, fontSize: 13, color: "#111", paddingVertical: 0 },
+  clearBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#ECECEC",
+  },
 
-  actionsRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  actionBtn: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  actionTxt: { fontSize: 11, fontWeight: "900" },
+  tabsRow: { flexDirection: "row", gap: 10, marginTop: 12, flexWrap: "wrap" },
+  tabChip: {
+    borderWidth: 1,
+    borderColor: "#E3E3E3",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  tabTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
 
-  footer: { marginTop: 12, fontSize: 12, lineHeight: 17 },
+  loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
+  loadingTxt: { fontSize: 13, fontWeight: "800" },
+
+  emptyCard: { backgroundColor: "#FFFFFF", borderRadius: 22, padding: 18 },
+  emptyTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
+  emptySub: { marginTop: 6, fontSize: 13, color: "#777", fontWeight: "700" },
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 12,
+  },
+
+  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+
+  name: { fontSize: 16, fontWeight: "900", color: "#111" },
+  problem: { marginTop: 4, fontSize: 12, fontWeight: "800", color: "#777" },
+
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dot: { width: 9, height: 9, borderRadius: 99 },
+  statusTxt: { fontSize: 11, fontWeight: "900" },
+
+  rowLine: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 },
+  rowText: { fontSize: 13, color: ORANGE, fontWeight: "800", flex: 1 },
+
+  descBox: {
+    marginTop: 12,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EDEDED",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    ...shadow,
+  },
+  descTitle: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 6 },
+  descText: { fontSize: 13, color: "#777", fontWeight: "700", lineHeight: 18 },
+
+  actionsRow: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#F2F2F2",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#E3E3E3",
+  },
+  actionTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
+
+  lockHint: { width: "100%", marginTop: 6, fontSize: 11, fontWeight: "800", color: "#777" },
+
+  footerNote: { marginTop: 10, fontSize: 12, color: "#777", fontWeight: "700" },
 });

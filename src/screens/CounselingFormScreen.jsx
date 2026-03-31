@@ -16,6 +16,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
 
+const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
 
 const problemOptions = ["Anxiety", "Depression", "Family Issues", "Relationship Issues", "Other"];
@@ -23,19 +24,20 @@ const genderOptions = ["Male", "Female"];
 const languageOptions = ["Nepali", "English"];
 const modeOptions = ["Online", "Offline"];
 
+/**
+ * ✅ Create counseling request
+ * returns: { ok:true, request:{ _id / id } }
+ */
 async function apiCreateCounselingRequest(token, payload) {
   const res = await fetch(`${BASE_URL}/api/counseling/requests`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload || {}),
   });
 
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to submit counseling request");
-  return data;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.message || "Failed to submit form");
+  return json;
 }
 
 const CounselingFormScreen = ({ navigation }) => {
@@ -54,12 +56,22 @@ const CounselingFormScreen = ({ navigation }) => {
   const [modeOpen, setModeOpen] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
+  const [bookedLoading, setBookedLoading] = useState(false);
 
   const closeAllDropdowns = () => {
     setProblemOpen(false);
     setGenderOpen(false);
     setLanguageOpen(false);
     setModeOpen(false);
+  };
+
+  const bookedSessions = async () => {
+    try {
+      setBookedLoading(true);
+      navigation.navigate("UserBookedCounseling");
+    } finally {
+      setBookedLoading(false);
+    }
   };
 
   const validate = () => {
@@ -96,7 +108,10 @@ const CounselingFormScreen = ({ navigation }) => {
         description,
       };
 
-      const created = await apiCreateCounselingRequest(token, payload);
+      const json = await apiCreateCounselingRequest(token, payload);
+
+      // support both id styles
+      const requestId = json?.request?._id || json?.request?.id;
 
       Alert.alert(
         "Submitted ✅",
@@ -104,10 +119,7 @@ const CounselingFormScreen = ({ navigation }) => {
         [
           {
             text: "OK",
-            onPress: () =>
-              navigation.navigate("Counselors", {
-                requestId: created?.request?._id || null,
-              }),
+            onPress: () => navigation.navigate("Counselors", { requestId }),
           },
         ]
       );
@@ -314,22 +326,46 @@ const CounselingFormScreen = ({ navigation }) => {
               <Text style={styles.submitText}>Submit</Text>
             )}
           </TouchableOpacity>
+
+          {/* View Booked Sessions */}
+          <TouchableOpacity
+            style={[styles.submitButton1, bookedLoading && { opacity: 0.75 }]}
+            onPress={bookedSessions}
+            disabled={bookedLoading}
+            activeOpacity={0.9}
+          >
+            {bookedLoading ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <ActivityIndicator color="#111" />
+                <Text style={styles.submitText}>Loading…</Text>
+              </View>
+            ) : (
+              <Text style={styles.submitText}>View Booked Sessions</Text>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* ORANGE SIDE PILL */}
       <View style={styles.sidePill} />
 
-      {/* BOTTOM BAR */}
+      {/* ✅ BOTTOM BAR */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={handleSettingsPress}>
-          <Icon name="settings" size={20} color="#111" />
+        <TouchableOpacity style={styles.tabItem} onPress={handleSettingsPress} activeOpacity={0.8}>
+          <Icon name="settings" size={20} color="#9A9A9A" />
+          <Text style={styles.tabLabel}>Settings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
+
+        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress} activeOpacity={0.8}>
+          <View style={styles.homeIconWrapper}>
+            <Icon name="home" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress}>
-          <Icon name="user" size={20} color="#111" />
+
+        <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress} activeOpacity={0.8}>
+          <Icon name="user" size={20} color="#9A9A9A" />
+          <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -340,6 +376,7 @@ export default CounselingFormScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F4" },
+
   header: {
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 24,
@@ -351,20 +388,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#FF7A1A",
+    color: ORANGE,
     marginLeft: 8,
   },
+
   content: {
     paddingHorizontal: 24,
     paddingTop: 18,
-    paddingBottom: 140,
+    paddingBottom: 160,
   },
+
   label: {
     fontSize: 14,
     fontWeight: "600",
     color: "#333",
     marginBottom: 6,
   },
+
   dropdown: {
     flexDirection: "row",
     alignItems: "center",
@@ -382,6 +422,7 @@ const styles = StyleSheet.create({
   },
   placeholder: { color: "#B0B0B0", fontSize: 14 },
   selectedValue: { color: "#222" },
+
   dropdownList: {
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
@@ -395,8 +436,10 @@ const styles = StyleSheet.create({
   },
   dropdownItem: { paddingHorizontal: 14, paddingVertical: 10 },
   dropdownItemText: { fontSize: 14, color: "#222" },
+
   row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   rowItem: { flex: 1, marginRight: 8 },
+
   input: {
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
@@ -412,7 +455,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   textArea: { height: 100, textAlignVertical: "top" },
+
   helperText: { fontSize: 12, color: "#555", marginBottom: 20 },
+
   submitButton: {
     alignSelf: "center",
     backgroundColor: "#FFFFFF",
@@ -425,14 +470,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  submitButton1: {
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 60,
+    paddingVertical: 14,
+    borderRadius: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+    marginTop: 10,
+  },
   submitText: { fontSize: 16, fontWeight: "700", color: "#111" },
+
   sidePill: {
     position: "absolute",
     right: 0,
-    bottom: 110,
+    top: "55%",
     width: 56,
     height: 110,
-    backgroundColor: "#FF7A1A",
+    backgroundColor: ORANGE,
     borderTopLeftRadius: 40,
     borderBottomLeftRadius: 40,
     elevation: 5,
@@ -441,23 +500,35 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: -2, height: 2 },
   },
+
   bottomBar: {
     position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: "row",
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderRadius: 28,
     paddingHorizontal: 32,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: "center",
     justifyContent: "space-between",
-    width: 220,
-    elevation: 6,
     shadowColor: "#000",
     shadowOpacity: 0.18,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
   },
-  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
+  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
+  homeIconWrapper: {
+    backgroundColor: ORANGE,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  tabLabel: { fontSize: 11, color: "#9A9A9A", marginTop: 2 },
+  tabLabelActive: { color: ORANGE, fontWeight: "600" },
 });

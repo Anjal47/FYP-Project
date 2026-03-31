@@ -45,7 +45,8 @@ export default function AdminTabs() {
       <Tab.Screen name="Overview" component={AdminDashboardScreen} />
       <Tab.Screen name="Users" component={AdminUsersScreen} />
       <Tab.Screen name="Staff" component={AdminStaffScreen} />
-      <Tab.Screen name="Reports" component={AdminReportsScreen} />
+     <Tab.Screen name="AdminReports" component={AdminReportsScreen} />
+
     </Tab.Navigator>
   );
 }

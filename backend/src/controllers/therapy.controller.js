@@ -54,13 +54,22 @@ exports.listTherapists = async (req, res) => {
 };
 
 /** POST /api/therapy/appointments */
+/** POST /api/therapy/appointments */
 exports.bookAppointment = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { therapistId, requestId, month = "December", day, slot, notes = "" } = req.body;
+    let { therapistId, requestId, month = "December", day, slot, notes = "" } = req.body;
 
-    if (!therapistId || !requestId || !day || !slot) {
-      return res.status(400).json({ ok: false, message: "therapistId, requestId, day, slot required" });
+    // ✅ normalize (prevents "09:00 " vs "09:00")
+    month = String(month || "").trim();
+    slot = String(slot || "").trim();
+    day = Number(day);
+
+    if (!therapistId || !requestId || !month || !day || !slot) {
+      return res.status(400).json({
+        ok: false,
+        message: "therapistId, requestId, month, day, slot required",
+      });
     }
 
     const therapist = await User.findOne({ _id: therapistId, role: "therapist", isActive: true });
@@ -68,6 +77,35 @@ exports.bookAppointment = async (req, res) => {
 
     const reqDoc = await TherapyRequest.findOne({ _id: requestId, userId });
     if (!reqDoc) return res.status(404).json({ ok: false, message: "Therapy request not found" });
+
+    // ✅ RULE 1: therapist slot must be free (only pending/confirmed blocks)
+    const therapistBusy = await TherapyAppointment.findOne({
+      therapistId,
+      month,
+      day,
+      slot,
+      status: { $in: ["pending", "confirmed"] },
+    }).select("_id");
+
+    if (therapistBusy) {
+      return res.status(409).json({ ok: false, message: "That slot is already booked for this therapist." });
+    }
+
+    // ✅ RULE 2: user cannot double-book same time
+    const userBusy = await TherapyAppointment.findOne({
+      userId,
+      month,
+      day,
+      slot,
+      status: { $in: ["pending", "confirmed"] },
+    }).select("_id");
+
+    if (userBusy) {
+      return res.status(409).json({
+        ok: false,
+        message: "You already have a therapy session booked at this time. Please choose another slot.",
+      });
+    }
 
     const appt = await TherapyAppointment.create({
       userId,
@@ -85,16 +123,35 @@ exports.bookAppointment = async (req, res) => {
 
     return res.status(201).json({
       ok: true,
-      appointment: { id: appt._id, therapistId, requestId, month, day, slot, status: appt.status },
+      appointment: {
+        id: appt._id,
+        therapistId,
+        requestId,
+        month,
+        day,
+        slot,
+        status: appt.status,
+      },
     });
   } catch (e) {
-    if (e?.code === 11000) return res.status(409).json({ ok: false, message: "That slot is already booked for this therapist." });
+    // ✅ DB unique index protection (race condition safety)
+    if (e?.code === 11000) {
+      const key = e?.keyPattern || {};
+      if (key.userId) {
+        return res.status(409).json({
+          ok: false,
+          message: "You already have a therapy session booked at this time. Please choose another slot.",
+        });
+      }
+      return res.status(409).json({ ok: false, message: "That slot is already booked for this therapist." });
+    }
+
     return res.status(500).json({ ok: false, message: "Failed to book appointment", error: e?.message });
   }
 };
+
 exports.getTherapistAppointments = async (req, res) => {
   try {
-    // only therapist role should access
     if (req.user?.role !== "therapist") {
       return res.status(403).json({ ok: false, message: "Therapist access only" });
     }
@@ -117,7 +174,8 @@ exports.getTherapistAppointments = async (req, res) => {
         notes: a.notes || "",
         createdAt: a.createdAt,
 
-        client: {
+        // ✅ IMPORTANT: send user (not client)
+        user: {
           id: a.userId?._id,
           fullName: a.userId?.fullName || "Unknown",
           email: a.userId?.email || "",

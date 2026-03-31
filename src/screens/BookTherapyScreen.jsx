@@ -24,10 +24,35 @@ const timeSlots = [
   "03:00 - 03:30 PM",
 ];
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const getDaysInMonth = (year, monthIndex) => {
+  return new Date(year, monthIndex + 1, 0).getDate();
+};
+
+const getFirstDayOffsetMonday = (year, monthIndex) => {
+  const jsDay = new Date(year, monthIndex, 1).getDay();
+  return (jsDay + 6) % 7;
+};
+
 async function apiGetTherapists(token) {
   const res = await fetch(`${BASE_URL}/api/therapy/therapists`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Failed to load therapists");
   return data;
@@ -36,13 +61,27 @@ async function apiGetTherapists(token) {
 async function apiBookTherapy(token, payload) {
   const res = await fetch(`${BASE_URL}/api/therapy/appointments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(payload || {}),
   });
+
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to book appointment");
+
+  if (!res.ok) {
+    const msg = data?.message || "Failed to book appointment";
+    const err = new Error(msg);
+    err.status = res.status;
+    err.payload = data;
+    throw err;
+  }
+
   return data;
 }
+
+const getId = (x) => String(x?._id || x?.id || "");
 
 export default function BookTherapyScreen({ navigation, route }) {
   const UI = useMemo(
@@ -57,7 +96,6 @@ export default function BookTherapyScreen({ navigation, route }) {
     []
   );
 
-  // ✅ IMPORTANT: requestId must come from TherapyScreen navigation params
   const requestId = route?.params?.requestId || null;
 
   const [loading, setLoading] = useState(true);
@@ -66,22 +104,45 @@ export default function BookTherapyScreen({ navigation, route }) {
   const [therapists, setTherapists] = useState([]);
   const [selectedTherapist, setSelectedTherapist] = useState(null);
 
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [monthIndex, setMonthIndex] = useState(now.getMonth());
+
   const [selectedDay, setSelectedDay] = useState(null);
   const [slotOpen, setSlotOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState("");
 
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const monthName = MONTHS[monthIndex];
+  const daysInMonth = getDaysInMonth(year, monthIndex);
+  const offset = getFirstDayOffsetMonday(year, monthIndex);
+
+  const calendarCells = useMemo(() => {
+    const blanks = Array.from({ length: offset }, (_, i) => ({
+      type: "blank",
+      key: `b-${i}`,
+    }));
+
+    const days = Array.from({ length: daysInMonth }, (_, i) => ({
+      type: "day",
+      day: i + 1,
+      key: `d-${i + 1}`,
+    }));
+
+    return [...blanks, ...days];
+  }, [offset, daysInMonth]);
 
   const loadTherapists = async () => {
     try {
       setLoading(true);
+
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         navigation.reset({ index: 0, routes: [{ name: "Login" }] });
         return;
       }
+
       const data = await apiGetTherapists(token);
-      setTherapists(data?.therapists || []);
+      setTherapists(Array.isArray(data?.therapists) ? data.therapists : []);
     } catch (e) {
       Alert.alert("Error", e?.message || "Could not load therapists");
     } finally {
@@ -90,7 +151,6 @@ export default function BookTherapyScreen({ navigation, route }) {
   };
 
   useEffect(() => {
-    // ✅ guard immediately (better UX)
     if (!requestId) {
       Alert.alert(
         "Missing requestId",
@@ -99,10 +159,35 @@ export default function BookTherapyScreen({ navigation, route }) {
       );
       return;
     }
-
     loadTherapists();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setSelectedDay(null);
+    setSelectedSlot("");
+    setSlotOpen(false);
+  }, [monthIndex, year]);
+
+  const changeMonth = (dir) => {
+    setSelectedDay(null);
+    setSelectedSlot("");
+    setSlotOpen(false);
+
+    setMonthIndex((prev) => {
+      let next = prev + dir;
+
+      if (next < 0) {
+        next = 11;
+        setYear((y) => y - 1);
+      } else if (next > 11) {
+        next = 0;
+        setYear((y) => y + 1);
+      }
+
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     try {
@@ -110,10 +195,13 @@ export default function BookTherapyScreen({ navigation, route }) {
         Alert.alert("Missing request", "No requestId found. Please submit the therapy form again.");
         return;
       }
-      if (!selectedTherapist?.id) {
+
+      const therapistId = getId(selectedTherapist);
+      if (!therapistId) {
         Alert.alert("Pick therapist", "Please select a therapist first.");
         return;
       }
+
       if (!selectedDay || !selectedSlot) {
         Alert.alert("Incomplete", "Please select a day and a time slot.");
         return;
@@ -127,36 +215,32 @@ export default function BookTherapyScreen({ navigation, route }) {
         return;
       }
 
-      const month = "December";
-
-      // ✅ FIXED: include requestId
       const payload = {
-        therapistId: selectedTherapist.id,
+        therapistId,
         requestId,
-        month,
+        month: monthName,
         day: selectedDay,
         slot: selectedSlot,
-        notes: "", // optional, but safe
+        notes: "",
       };
-
-      // ✅ one-time debug (remove later if you want)
-      console.log("BOOKING PAYLOAD =>", payload);
 
       const data = await apiBookTherapy(token, payload);
 
       Alert.alert(
         "Appointment Booked ✅",
-        `Therapist: ${selectedTherapist.fullName}\nRequest ID: ${requestId}\nDate: ${month} ${selectedDay}\nTime: ${selectedSlot}\nStatus: ${data?.appointment?.status || "pending"}`,
+        `Therapist: ${selectedTherapist?.fullName || "—"}\nRequest ID: ${requestId}\nDate: ${monthName} ${selectedDay}, ${year}\nTime: ${selectedSlot}\nStatus: ${data?.appointment?.status || "pending"}`,
         [{ text: "OK", onPress: () => navigation.goBack() }]
       );
     } catch (e) {
-      Alert.alert("Booking failed", e?.message || "Could not book appointment");
+      if (e?.status === 409) {
+        Alert.alert("Slot not available", e?.message || "This time slot is already booked.");
+      } else {
+        Alert.alert("Booking failed", e?.message || "Could not book appointment");
+      }
     } finally {
       setBooking(false);
     }
   };
-
-  const handleHomePress = () => navigation.navigate("Home");
 
   if (loading) {
     return (
@@ -171,7 +255,6 @@ export default function BookTherapyScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: UI.bg }]}>
-      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={20} color={UI.text} />
@@ -181,10 +264,13 @@ export default function BookTherapyScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.body}
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.screenTitle}>Book Appointment.</Text>
 
-        {/* THERAPIST LIST */}
         <Text style={styles.label}>Select Therapist</Text>
 
         {therapists.length === 0 ? (
@@ -192,37 +278,50 @@ export default function BookTherapyScreen({ navigation, route }) {
             <Text style={{ color: UI.mut, fontWeight: "700" }}>
               No therapists found. Ask admin to create therapist accounts.
             </Text>
-            <TouchableOpacity onPress={loadTherapists} style={[styles.reloadBtn]}>
+            <TouchableOpacity onPress={loadTherapists} style={styles.reloadBtn}>
               <Text style={{ fontWeight: "900", color: UI.text }}>Reload</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 6 }}>
-            {therapists.map((t) => {
-              const active = selectedTherapist?.id === t.id;
+            {therapists.map((t, idx) => {
+              const id = getId(t) || `t-${idx}`;
+              const active = getId(selectedTherapist) === id;
+
               return (
                 <TouchableOpacity
-                  key={t.id}
+                  key={id}
                   activeOpacity={0.9}
                   onPress={() => setSelectedTherapist(t)}
-                  style={[
-                    styles.therapistCard,
-                    active && { borderColor: ORANGE, borderWidth: 1.5 },
-                  ]}
+                  style={[styles.therapistCard, active && { borderColor: ORANGE, borderWidth: 1.5 }]}
                 >
                   <View style={styles.avatar} />
-                  <Text style={styles.therapistName}>{t.fullName}</Text>
-                  {!!t.qualification && <Text style={styles.therapistMeta}>{t.qualification}</Text>}
-                  {!!t.workingArea && <Text style={styles.therapistMeta}>{t.workingArea}</Text>}
+                  <Text style={styles.therapistName}>{t?.fullName || "Therapist"}</Text>
+                  {!!t?.qualification && <Text style={styles.therapistMeta}>{t.qualification}</Text>}
+                  {!!t?.workingArea && <Text style={styles.therapistMeta}>{t.workingArea}</Text>}
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
         )}
 
-        {/* CALENDAR CARD */}
         <View style={styles.calendarCard}>
-          <Text style={styles.monthTitle}>December</Text>
+          <View style={styles.monthHeaderRow}>
+            <TouchableOpacity style={styles.monthNavBtn} onPress={() => changeMonth(-1)} activeOpacity={0.8}>
+              <Icon name="chevron-left" size={18} color="#111" />
+            </TouchableOpacity>
+
+            <View style={{ alignItems: "center" }}>
+              <Text style={styles.monthTitle}>
+                {monthName} {year}
+              </Text>
+              <Text style={styles.monthSub}>Pick a day</Text>
+            </View>
+
+            <TouchableOpacity style={styles.monthNavBtn} onPress={() => changeMonth(1)} activeOpacity={0.8}>
+              <Icon name="chevron-right" size={18} color="#111" />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.weekRow}>
             <Text style={styles.weekLabel}>Mo</Text>
@@ -235,13 +334,20 @@ export default function BookTherapyScreen({ navigation, route }) {
           </View>
 
           <View style={styles.daysGrid}>
-            {days.map((day) => {
+            {calendarCells.map((cell) => {
+              if (cell.type === "blank") {
+                return <View key={cell.key} style={[styles.dayCell, { backgroundColor: "transparent" }]} />;
+              }
+
+              const day = cell.day;
               const isSelected = day === selectedDay;
+
               return (
                 <TouchableOpacity
-                  key={day}
+                  key={cell.key}
                   style={[styles.dayCell, isSelected && styles.dayCellSelected]}
                   onPress={() => setSelectedDay(day)}
+                  activeOpacity={0.9}
                 >
                   <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
                 </TouchableOpacity>
@@ -250,10 +356,10 @@ export default function BookTherapyScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* TIME SLOT DROPDOWN */}
         <View style={{ marginTop: 24 }}>
           <Text style={styles.label}>Time Slot</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setSlotOpen((prev) => !prev)}>
+
+          <TouchableOpacity style={styles.dropdown} onPress={() => setSlotOpen((p) => !p)} activeOpacity={0.9}>
             <Text style={[styles.placeholder, selectedSlot ? styles.selectedValue : null]}>
               {selectedSlot || "Time Slot..."}
             </Text>
@@ -270,6 +376,7 @@ export default function BookTherapyScreen({ navigation, route }) {
                     setSelectedSlot(slot);
                     setSlotOpen(false);
                   }}
+                  activeOpacity={0.9}
                 >
                   <Text style={styles.dropdownItemText}>{slot}</Text>
                 </TouchableOpacity>
@@ -278,11 +385,11 @@ export default function BookTherapyScreen({ navigation, route }) {
           )}
         </View>
 
-        {/* SUBMIT BUTTON */}
         <TouchableOpacity
           style={[styles.submitButton, booking && { opacity: 0.7 }]}
           onPress={handleSubmit}
           disabled={booking}
+          activeOpacity={0.9}
         >
           {booking ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -295,21 +402,7 @@ export default function BookTherapyScreen({ navigation, route }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* ORANGE SIDE PILL */}
       <View style={styles.sidePill} />
-
-      {/* BOTTOM BAR */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
@@ -332,7 +425,6 @@ const styles = StyleSheet.create({
   bodyContent: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 140 },
 
   screenTitle: { fontSize: 22, fontWeight: "700", color: "#111", marginBottom: 16 },
-
   label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 },
 
   therapistCard: {
@@ -376,13 +468,38 @@ const styles = StyleSheet.create({
     elevation: 4,
     marginTop: 14,
   },
-  monthTitle: { fontSize: 16, fontWeight: "700", textAlign: "center", marginBottom: 12 },
+  monthHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  monthNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#EEE",
+  },
+  monthTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
+  monthSub: { marginTop: 2, fontSize: 11, fontWeight: "700", color: "#777" },
+
   weekRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 10, paddingHorizontal: 4 },
   weekLabel: { fontSize: 12, color: "#777", width: 24, textAlign: "center" },
   weekendLabel: { color: "#FF7A1A" },
 
   daysGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", paddingHorizontal: 4 },
-  dayCell: { width: "12%", aspectRatio: 1, borderRadius: 16, alignItems: "center", justifyContent: "center", marginVertical: 4 },
+  dayCell: {
+    width: "12%",
+    aspectRatio: 1,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 4,
+  },
   dayCellSelected: { backgroundColor: "#FF7A1A" },
   dayText: { fontSize: 12, color: "#444" },
   dayTextSelected: { color: "#FFFFFF", fontWeight: "700" },
@@ -448,24 +565,4 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: -2, height: 2 },
   },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: 220,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
 });

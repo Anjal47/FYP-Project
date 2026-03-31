@@ -1,10 +1,16 @@
-const BASE_URL = "http://10.0.2.2:5000"; // Android emulator
-// If physical device, use your PC IP e.g. http://192.168.1.10:5000
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const BASE_URL = "http://10.0.2.2:5000";
 
 export async function postJSON(path, body) {
+  const token = await AsyncStorage.getItem("token");
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body || {}),
   });
 

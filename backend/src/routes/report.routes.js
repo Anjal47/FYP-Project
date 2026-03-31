@@ -1,26 +1,18 @@
+// src/routes/report.routes.js
 const router = require("express").Router();
 const auth = require("../middleware/auth");
-const Report = require("../models/Report");
+const reportController = require("../controllers/report.controller");
 
-// user creates report
-router.post("/", auth, async (req, res, next) => {
-  try {
-    const { type, area, description, priority } = req.body || {};
-    if (!type || !area) return res.status(400).json({ ok: false, message: "type and area required" });
+// Create a report (requires login)
+router.post("/", auth, reportController.createReport);
 
-    const r = await Report.create({
-      createdBy: req.user._id,
-      type,
-      area,
-      description: description || "",
-      priority: priority || "Medium",
-      status: "Open",
-    });
+// Get my reports (requires login)
+router.get("/mine", auth, reportController.getMyReports);
 
-    res.status(201).json({ ok: true, report: r });
-  } catch (e) {
-    next(e);
-  }
-});
+// Check status by reportCode (requires login + ownership/staff enforced in controller)
+router.get("/status/:reportCode", auth, reportController.getReportStatusByCode);
+
+// Optional quick test route
+router.get("/ping", (req, res) => res.json({ ok: true, route: "reports" }));
 
 module.exports = router;

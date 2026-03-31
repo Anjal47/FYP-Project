@@ -166,17 +166,7 @@ const SupportScreen = ({ navigation }) => {
       <View style={styles.sidePill} />
 
       {/* BOTTOM BAR (same style as other screens) */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
+
     </SafeAreaView>
   );
 };

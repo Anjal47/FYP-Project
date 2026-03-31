@@ -53,17 +53,7 @@ const CounselingScreen = ({ navigation }) => {
       <View style={styles.sidePill} />
 
       {/* BOTTOM TABS */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
+      
     </SafeAreaView>
   );
 };

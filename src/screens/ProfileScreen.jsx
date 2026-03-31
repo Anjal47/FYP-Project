@@ -313,21 +313,26 @@ export default function ProfileScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={s.header}>
-          <Text style={[s.title, { color: UI.text }]}>My Profile</Text>
-          <TouchableOpacity onPress={() => navigation.navigate("Settings")}>
-            <Text style={[s.link, { color: UI.orange }]}>Settings</Text>
-          </TouchableOpacity>
-        </View>
+        
+      <View style={s.header}>
+  <TouchableOpacity
+    activeOpacity={0.85}
+    onPress={() => navigation.goBack?.()}
+    style={s.backBtn}
+  >
+    <Text style={s.backArrow}>‹</Text>
+  </TouchableOpacity>
 
-        {/* Profile Card */}
-        <View style={[s.card, { borderColor: UI.line }]}>
-          <Text style={[s.bigName, { color: UI.text }]}>{me?.fullName || "—"}</Text>
-          <Text style={[s.small, { color: UI.mut }]}>{me?.email || "—"}</Text>
-          <Text style={[s.small, { color: UI.mut }]}>
-            Role: {(me?.role || "user").toUpperCase()}
-          </Text>
-        </View>
+  <View style={{ flex: 1 }}>
+    <Text style={[s.title, { color: UI.text }]}>My Profile</Text>
+    <Text style={s.subTitleSmall}>Manage your account details</Text>
+  </View>
+
+  <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate("Settings")}>
+    <Text style={[s.link, { color: UI.orange }]}>Settings</Text>
+  </TouchableOpacity>
+</View>
+
 
         {/* Edit profile */}
         <View style={[s.card, { borderColor: UI.line }]}>
@@ -441,6 +446,35 @@ function Field({ label, multiline, style, ...props }) {
 }
 
 const s = StyleSheet.create({
+  backBtn: {
+  width: 40,
+  height: 40,
+  borderRadius: 20,
+  backgroundColor: "#FFFFFF",
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 10,
+  borderWidth: 1,
+  borderColor: "rgba(0,0,0,0.08)",
+  shadowColor: "#000",
+  shadowOpacity: 0.08,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 4,
+},
+backArrow: {
+  fontSize: 26,
+  fontWeight: "900",
+  color: "#111",
+  marginTop: -2,
+},
+subTitleSmall: {
+  fontSize: 12,
+  color: "#777",
+  marginTop: 2,
+  fontWeight: "700",
+},
+
   safe: { flex: 1 },
   page: { padding: 16, paddingBottom: 26 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },

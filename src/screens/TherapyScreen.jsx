@@ -29,6 +29,7 @@ async function apiCreateTherapyRequest(token, payload) {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload || {}),
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Failed to submit form");
   return data;
@@ -38,10 +39,14 @@ async function apiGetMyAppointments(token) {
   const res = await fetch(`${BASE_URL}/api/therapy/my/appointments`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Failed to load your bookings");
   return data;
 }
+
+const norm = (v) => String(v || "").toLowerCase().trim();
+const getApptId = (b) => String(b?._id || b?.id || "");
 
 export default function TherapyScreen({ navigation }) {
   const UI = useMemo(
@@ -72,7 +77,6 @@ export default function TherapyScreen({ navigation }) {
 
   const [submitting, setSubmitting] = useState(false);
 
-  // ✅ Bookings state
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [myBookings, setMyBookings] = useState([]);
 
@@ -84,25 +88,30 @@ export default function TherapyScreen({ navigation }) {
   };
 
   const badgeColor = (status) => {
-    if (status === "confirmed") return UI.ok;
-    if (status === "pending") return UI.warn;
-    if (status === "cancelled") return UI.danger;
-    if (status === "completed") return UI.ok;
+    const s = norm(status);
+    if (s === "confirmed") return UI.ok;      // approved
+    if (s === "pending") return UI.warn;
+    if (s === "cancelled") return UI.danger;
+    if (s === "completed") return UI.ok;
     return UI.mut;
   };
+
+  // ✅ CHAT: unlock after APPROVED/CONFIRMED only (NOT online mode)
+  const canChat = (booking) => norm(booking?.status) === "confirmed";
 
   const loadMyBookings = async () => {
     try {
       setBookingsLoading(true);
+
       const token = await AsyncStorage.getItem("token");
       if (!token) {
         navigation.reset({ index: 0, routes: [{ name: "Login" }] });
         return;
       }
+
       const data = await apiGetMyAppointments(token);
-      setMyBookings(data?.appointments || []);
+      setMyBookings(Array.isArray(data?.appointments) ? data.appointments : []);
     } catch (e) {
-      // keep quiet-ish, but visible
       Alert.alert("Bookings", e?.message || "Could not load bookings");
     } finally {
       setBookingsLoading(false);
@@ -123,6 +132,7 @@ export default function TherapyScreen({ navigation }) {
         Alert.alert("Missing", "Please fill problem, age, gender, language and mode.");
         return;
       }
+
       if (Number(age) < 5 || Number(age) > 100) {
         Alert.alert("Invalid age", "Please enter a valid age.");
         return;
@@ -137,8 +147,8 @@ export default function TherapyScreen({ navigation }) {
       }
 
       const payload = { problem, age: Number(age), gender, language, mode, description };
-      const data = await apiCreateTherapyRequest(token, payload);
 
+      const data = await apiCreateTherapyRequest(token, payload);
       const requestId = data?.request?.id;
 
       Alert.alert("Form Submitted ✅", "Now pick a therapist and time slot.", [
@@ -158,8 +168,6 @@ export default function TherapyScreen({ navigation }) {
     }
   };
 
-  const handleHomePress = () => navigation.navigate("Home");
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -170,21 +178,13 @@ export default function TherapyScreen({ navigation }) {
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* ✅ MY BOOKINGS LIST */}
           <View style={[styles.bookingsCard, { backgroundColor: UI.card }]}>
             <View style={styles.bookingsHeaderRow}>
               <Text style={styles.bookingsTitle}>My Booked Sessions</Text>
 
-              <TouchableOpacity
-                onPress={loadMyBookings}
-                style={styles.refreshBtn}
-                activeOpacity={0.9}
-              >
+              <TouchableOpacity onPress={loadMyBookings} style={styles.refreshBtn} activeOpacity={0.9}>
                 <Icon name="refresh-cw" size={16} color="#111" />
                 <Text style={styles.refreshTxt}>Refresh</Text>
               </TouchableOpacity>
@@ -196,34 +196,50 @@ export default function TherapyScreen({ navigation }) {
                 <Text style={{ color: UI.mut, fontWeight: "700" }}>Loading your bookings…</Text>
               </View>
             ) : myBookings.length === 0 ? (
-              <Text style={{ color: UI.mut, fontWeight: "700" }}>
-                No bookings yet. Submit the form and book a slot.
-              </Text>
+              <Text style={{ color: UI.mut, fontWeight: "700" }}>No bookings yet. Submit the form and book a slot.</Text>
             ) : (
-              myBookings.map((b) => (
-                <View key={b.id} style={styles.bookingRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.bookingTherapist}>
-                      {b?.therapist?.fullName || "Therapist"}
-                    </Text>
-                    <Text style={styles.bookingMeta}>
-                      {b.month} {b.day} • {b.slot}
-                    </Text>
-                    {!!b?.therapist?.workingArea && (
-                      <Text style={styles.bookingMetaSmall}>
-                        {b.therapist.workingArea}
-                      </Text>
-                    )}
-                  </View>
+              myBookings.map((b) => {
+                const therapistName = b?.therapist?.fullName || "Therapist";
+                const appointmentId = getApptId(b);
 
-                  <View style={[styles.statusPill, { borderColor: badgeColor(b.status) }]}>
-                    <View style={[styles.statusDot, { backgroundColor: badgeColor(b.status) }]} />
-                    <Text style={[styles.statusTxt, { color: badgeColor(b.status) }]}>
-                      {String(b.status || "pending").toUpperCase()}
-                    </Text>
+                return (
+                  <View key={appointmentId || String(Math.random())} style={styles.bookingRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.bookingTherapist}>{therapistName}</Text>
+                      <Text style={styles.bookingMeta}>
+                        {b.month} {b.day} • {b.slot}
+                      </Text>
+
+                      {!!b?.therapist?.workingArea && <Text style={styles.bookingMetaSmall}>{b.therapist.workingArea}</Text>}
+
+                      {canChat(b) ? (
+                        <TouchableOpacity
+                          style={styles.chatBtn}
+                          activeOpacity={0.9}
+                          onPress={() =>
+                            navigation.navigate("TherapyChat", {
+                              appointmentId: String(appointmentId),
+                              therapistName,
+                            })
+                          }
+                        >
+                          <Icon name="message-circle" size={16} color="#111" />
+                          <Text style={styles.chatTxt}>Message</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.chatLockTxt}>Chat unlocks after Approved.</Text>
+                      )}
+                    </View>
+
+                    <View style={[styles.statusPill, { borderColor: badgeColor(b.status) }]}>
+                      <View style={[styles.statusDot, { backgroundColor: badgeColor(b.status) }]} />
+                      <Text style={[styles.statusTxt, { color: badgeColor(b.status) }]}>
+                        {String(b.status || "pending").toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -236,9 +252,7 @@ export default function TherapyScreen({ navigation }) {
               setProblemOpen((prev) => !prev);
             }}
           >
-            <Text style={[styles.placeholder, problem ? styles.selectedValue : null]}>
-              {problem || "Problem..."}
-            </Text>
+            <Text style={[styles.placeholder, problem ? styles.selectedValue : null]}>{problem || "Problem..."}</Text>
             <Icon name={problemOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
 
@@ -272,7 +286,7 @@ export default function TherapyScreen({ navigation }) {
               />
             </View>
 
-            <View style={styles.rowItem}>
+            <View style={[styles.rowItem, { marginRight: 0 }]}>
               <Text style={styles.label}>Gender</Text>
               <TouchableOpacity
                 style={styles.dropdown}
@@ -281,9 +295,7 @@ export default function TherapyScreen({ navigation }) {
                   setGenderOpen((prev) => !prev);
                 }}
               >
-                <Text style={[styles.placeholder, gender ? styles.selectedValue : null]}>
-                  {gender || "Select..."}
-                </Text>
+                <Text style={[styles.placeholder, gender ? styles.selectedValue : null]}>{gender || "Select..."}</Text>
                 <Icon name={genderOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
               </TouchableOpacity>
 
@@ -314,9 +326,7 @@ export default function TherapyScreen({ navigation }) {
               setLanguageOpen((prev) => !prev);
             }}
           >
-            <Text style={[styles.placeholder, language ? styles.selectedValue : null]}>
-              {language || "Language..."}
-            </Text>
+            <Text style={[styles.placeholder, language ? styles.selectedValue : null]}>{language || "Language..."}</Text>
             <Icon name={languageOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
 
@@ -345,9 +355,7 @@ export default function TherapyScreen({ navigation }) {
               setModeOpen((prev) => !prev);
             }}
           >
-            <Text style={[styles.placeholder, mode ? styles.selectedValue : null]}>
-              {mode || "Mode of Communication..."}
-            </Text>
+            <Text style={[styles.placeholder, mode ? styles.selectedValue : null]}>{mode || "Mode of Communication..."}</Text>
             <Icon name={modeOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
           </TouchableOpacity>
 
@@ -380,11 +388,7 @@ export default function TherapyScreen({ navigation }) {
 
           <Text style={styles.helperText}>Please fill every details.</Text>
 
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
+          <TouchableOpacity style={[styles.submitButton, submitting && { opacity: 0.7 }]} onPress={handleSubmit} disabled={submitting}>
             {submitting ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <ActivityIndicator color="#111" />
@@ -398,30 +402,25 @@ export default function TherapyScreen({ navigation }) {
       </KeyboardAvoidingView>
 
       <View style={styles.sidePill} />
-
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="settings" size={20} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress}>
-          <Icon name="home" size={22} color="#111" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tabItem}>
-          <Icon name="user" size={20} color="#111" />
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F4F4" },
-  header: { backgroundColor: "#FFFFFF", paddingHorizontal: 24, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: "#E3E3E3" },
+
+  header: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#E3E3E3",
+  },
   backRow: { flexDirection: "row", alignItems: "center" },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#FF7A1A", marginLeft: 8 },
+
   content: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 140 },
 
-  // ✅ bookings UI
   bookingsCard: {
     borderRadius: 16,
     padding: 14,
@@ -431,9 +430,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
+    backgroundColor: "#FFF",
   },
   bookingsHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   bookingsTitle: { fontSize: 14, fontWeight: "900", color: "#111" },
+
   refreshBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -446,18 +447,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   refreshTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
+
   bookingRow: {
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
     paddingTop: 10,
     marginTop: 10,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 12,
   },
+
   bookingTherapist: { fontSize: 13, fontWeight: "900", color: "#111" },
   bookingMeta: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#666" },
   bookingMetaSmall: { marginTop: 2, fontSize: 11, fontWeight: "700", color: "#888" },
+
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -470,21 +474,104 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 99 },
   statusTxt: { fontSize: 10, fontWeight: "900" },
 
+  chatBtn: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFF4E8",
+    borderWidth: 1,
+    borderColor: "#FFD7B7",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  chatTxt: { fontWeight: "900", color: "#111" },
+  chatLockTxt: { marginTop: 10, fontSize: 11, fontWeight: "800", color: "#888" },
+
   label: { fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 6 },
-  dropdown: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#FFFFFF", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
   placeholder: { color: "#B0B0B0", fontSize: 14 },
   selectedValue: { color: "#222" },
-  dropdownList: { backgroundColor: "#FFFFFF", borderRadius: 10, marginBottom: 16, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 5, overflow: "hidden" },
+
+  dropdownList: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+    overflow: "hidden",
+  },
   dropdownItem: { paddingHorizontal: 14, paddingVertical: 10 },
   dropdownItemText: { fontSize: 14, color: "#222" },
+
   row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   rowItem: { flex: 1, marginRight: 8 },
-  input: { backgroundColor: "#FFFFFF", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: "#222", shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2, marginBottom: 16 },
+
+  input: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: "#222",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+    marginBottom: 16,
+  },
   textArea: { height: 100, textAlignVertical: "top" },
+
   helperText: { fontSize: 12, color: "#555", marginBottom: 20 },
-  submitButton: { alignSelf: "center", backgroundColor: "#FFFFFF", paddingHorizontal: 60, paddingVertical: 14, borderRadius: 24, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4 },
+
+  submitButton: {
+    alignSelf: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 60,
+    paddingVertical: 14,
+    borderRadius: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
   submitText: { fontSize: 16, fontWeight: "700", color: "#111" },
-  sidePill: { position: "absolute", right: 0, bottom: 110, width: 56, height: 110, backgroundColor: "#FF7A1A", borderTopLeftRadius: 40, borderBottomLeftRadius: 40, elevation: 5, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: -2, height: 2 } },
-  bottomBar: { position: "absolute", bottom: 24, alignSelf: "center", flexDirection: "row", backgroundColor: "#FFFFFF", borderRadius: 24, paddingHorizontal: 32, paddingVertical: 10, alignItems: "center", justifyContent: "space-between", width: 220, elevation: 6, shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
-  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
+
+  sidePill: {
+    position: "absolute",
+    right: 0,
+    bottom: 110,
+    width: 56,
+    height: 110,
+    backgroundColor: "#FF7A1A",
+    borderTopLeftRadius: 40,
+    borderBottomLeftRadius: 40,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: -2, height: 2 },
+  },
 });
