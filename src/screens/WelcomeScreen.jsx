@@ -1,12 +1,18 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
-const PRIMARY_ORANGE = '#F57C00';
-const BG_COLOR = '#F5F5F5';
+const PRIMARY_ORANGE = "#F57C00";
 
 export default function WelcomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   return (
     <View
@@ -30,14 +36,14 @@ export default function WelcomeScreen({ navigation }) {
       <View style={styles.bottomArea}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => navigation.navigate("Login")}
         >
           <Text style={styles.primaryButtonText}>Login</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => navigation.navigate("Register")}
         >
           <Text style={styles.secondaryButtonText}>Create Account</Text>
         </TouchableOpacity>
@@ -46,10 +52,10 @@ export default function WelcomeScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
-    backgroundColor: BG_COLOR,
+    backgroundColor: "#F5F5F5",
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -103,4 +109,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+};

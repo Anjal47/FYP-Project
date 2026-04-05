@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postJSON } from "../utils/api";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 
@@ -21,14 +23,19 @@ function routeByRole(role) {
   if (role === "counsellor") return "CounsellorHome";
   if (role === "therapist") return "TherapistHome";
   if (role === "police") return "PoliceHome";
-   if (role === "municipality") return "MunicipalityWasteDashboard";
+  if (role === "municipality") return "MunicipalityWasteDashboard";
   return "Home";
 }
 
 export default function LoginScreen({ navigation }) {
+  const { theme, isDark } = useAppTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   const handleLogin = async () => {
     const e = email.trim().toLowerCase();
@@ -42,10 +49,7 @@ export default function LoginScreen({ navigation }) {
     try {
       setLoading(true);
 
-      // ✅ backend login
       const res = await postJSON("/api/auth/login", { email: e, password: p });
-      // expected: { ok:true, token, user:{ id, fullName, email, role } }
-
       const token = res?.token;
       const user = res?.user;
 
@@ -53,11 +57,9 @@ export default function LoginScreen({ navigation }) {
         throw new Error("Invalid response from server");
       }
 
-      // ✅ save for auto-login + role routing
       await AsyncStorage.setItem("token", token);
       await AsyncStorage.setItem("user", JSON.stringify(user));
 
-      // ✅ go to correct dashboard
       const next = routeByRole(user.role);
       navigation.reset({ index: 0, routes: [{ name: next }] });
     } catch (err) {
@@ -68,68 +70,64 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={s.safe}>
+    <SafeAreaView style={styles.safe}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={s.page}>
-          <Text style={s.brand}>
-            Angel<Text style={s.brandBold}>Touch.</Text>
+        <View style={styles.page}>
+          <Text style={styles.brand}>
+            Angel<Text style={styles.brandBold}>Touch.</Text>
           </Text>
 
-          <Text style={s.label}>Email</Text>
+          <Text style={styles.label}>Email</Text>
           <TextInput
-            style={s.input}
+            style={styles.input}
             value={email}
             onChangeText={setEmail}
             placeholder="Enter Email here..."
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.muted}
             autoCapitalize="none"
             keyboardType="email-address"
           />
 
-          <Text style={s.label}>Password</Text>
+          <Text style={styles.label}>Password</Text>
           <TextInput
-            style={s.input}
+            style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="Enter Password here..."
-            placeholderTextColor="#999"
+            placeholderTextColor={theme.muted}
             secureTextEntry
           />
 
           <TouchableOpacity
             onPress={() => navigation.navigate("ForgotPassword")}
-            style={s.forgotWrap}
+            style={styles.forgotWrap}
             activeOpacity={0.8}
           >
-            <Text style={s.forgotText}>Forgot Password?</Text>
+            <Text style={styles.forgotText}>Forgot Password?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.9}
-            style={[s.loginBtn, loading && { opacity: 0.7 }]}
+            style={[styles.loginBtn, loading && { opacity: 0.7 }]}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
                 <ActivityIndicator color="#fff" />
-                <Text style={s.loginBtnText}>Logging in...</Text>
+                <Text style={styles.loginBtnText}>Logging in...</Text>
               </View>
             ) : (
-              <Text style={s.loginBtnText}>Log In</Text>
+              <Text style={styles.loginBtnText}>Log In</Text>
             )}
           </TouchableOpacity>
 
-          <View style={s.bottomRow}>
-            <Text style={s.bottomText}>Don’t have an account?</Text>
+          <View style={styles.bottomRow}>
+            <Text style={styles.bottomText}>Don't have an account?</Text>
             <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-              <Text style={s.bottomLink}> Register</Text>
+              <Text style={styles.bottomLink}> Register</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={s.note}>
-            Backend login decides role automatically (admin/counsellor/therapist/police/user).
-          </Text>
         </View>
       </TouchableWithoutFeedback>
     </SafeAreaView>
@@ -144,7 +142,7 @@ const shadow = {
   elevation: 3,
 };
 
-const s = StyleSheet.create({
+const baseStyles = {
   safe: { flex: 1, backgroundColor: "#fff" },
   page: { flex: 1, padding: 22, justifyContent: "center" },
 
@@ -182,6 +180,4 @@ const s = StyleSheet.create({
   bottomRow: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
   bottomText: { color: "#333", fontSize: 12 },
   bottomLink: { color: ORANGE, fontSize: 12, fontWeight: "900" },
-
-  note: { marginTop: 12, textAlign: "center", fontSize: 11, color: "#666" },
-});
+};

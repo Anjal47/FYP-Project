@@ -1,5 +1,5 @@
 // src/screens/CrimeReportScreen.jsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -13,32 +13,26 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
-const BASE_URL = "http://10.0.2.2:5000";
-
-async function apiCreateReport(token, payload) {
-  const res = await fetch(`${BASE_URL}/api/reports`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload || {}),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
-  return data;
-}
 
 export default function CrimeReportScreen({ navigation, route }) {
+  const { theme, isDark } = useAppTheme();
   // ✅ hooks ALWAYS at top, no conditional returns above them
   const category = route?.params?.category || "Crime";
 
   const [description, setDescription] = useState("");
   const [area, setArea] = useState("");
+  const [media, setMedia] = useState({ photo: null, video: null });
   const [submitting, setSubmitting] = useState(false);
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   // ✅ safe split (no hooks)
   const words = String(category).split(" ");
@@ -46,9 +40,27 @@ export default function CrimeReportScreen({ navigation, route }) {
   const rest = words.slice(1).join(" ");
 
   const handleBack = () => navigation.goBack();
-  const handleHomePress = () => navigation.navigate("Home");
-
   const getToken = async () => AsyncStorage.getItem("token");
+
+  const onPickPhoto = async () => {
+    try {
+      const file = await pickReportPhoto();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, photo: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick image");
+    }
+  };
+
+  const onPickVideo = async () => {
+    try {
+      const file = await pickReportVideo();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, video: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick video");
+    }
+  };
 
   const onSubmit = async () => {
     try {
@@ -72,7 +84,7 @@ export default function CrimeReportScreen({ navigation, route }) {
         priority: "Medium",
       };
 
-      const data = await apiCreateReport(token, payload);
+      const data = await createReportRequest(token, payload, media);
 
       // ✅ DEBUG (look at Metro console)
       console.log("✅ CREATE REPORT RESPONSE:", JSON.stringify(data, null, 2));
@@ -100,6 +112,7 @@ export default function CrimeReportScreen({ navigation, route }) {
             onPress: () => {
               setDescription("");
               setArea("");
+              setMedia({ photo: null, video: null });
               navigation.goBack();
             },
           },
@@ -117,7 +130,7 @@ export default function CrimeReportScreen({ navigation, route }) {
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backRow} onPress={handleBack}>
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.headerTitle}>
             <Text style={styles.headerHighlight}> {firstWord}</Text>
             {rest ? <Text style={styles.headerDot}> {rest}.</Text> : null}
@@ -135,7 +148,7 @@ export default function CrimeReportScreen({ navigation, route }) {
         <TextInput
           style={styles.descriptionInput}
           placeholder="Enter Description..."
-          placeholderTextColor="#B0B0B0"
+          placeholderTextColor={theme.muted}
           multiline
           value={description}
           onChangeText={setDescription}
@@ -150,7 +163,7 @@ export default function CrimeReportScreen({ navigation, route }) {
         <TextInput
           style={styles.locationInput}
           placeholder="e.g. Kathmandu, Baneshwor, near XYZ..."
-          placeholderTextColor="#B0B0B0"
+          placeholderTextColor={theme.muted}
           value={area}
           onChangeText={setArea}
         />
@@ -159,27 +172,41 @@ export default function CrimeReportScreen({ navigation, route }) {
         <View style={styles.mediaRow}>
           <TouchableOpacity
             style={styles.mediaCard}
-            onPress={() => Alert.alert("Later", "Image upload next step")}
+            onPress={onPickPhoto}
           >
-            <Icon name="image" size={20} color="#111" />
-            <Text style={styles.mediaLabel}>Image</Text>
+            <Icon name="image" size={20} color={theme.text} />
+            <Text style={styles.mediaLabel}>{media.photo ? "Change Image" : "Image"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.mediaCard}
-            onPress={() => Alert.alert("Later", "Audio upload next step")}
+            onPress={() =>
+              Alert.alert(
+                "Audio picker not ready",
+                "Audio upload is supported on the backend, but this app needs a document picker library to choose audio files."
+              )
+            }
           >
-            <Icon name="mic" size={20} color="#111" />
+            <Icon name="mic" size={20} color={theme.text} />
             <Text style={styles.mediaLabel}>Audio</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.mediaCard}
-            onPress={() => Alert.alert("Later", "Video upload next step")}
+            onPress={onPickVideo}
           >
-            <Icon name="video" size={20} color="#111" />
-            <Text style={styles.mediaLabel}>Video</Text>
+            <Icon name="video" size={20} color={theme.text} />
+            <Text style={styles.mediaLabel}>{media.video ? "Change Video" : "Video"}</Text>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.mediaInfoBox}>
+          <Text style={styles.mediaInfoTitle}>Optional evidence</Text>
+          <Text style={styles.mediaInfoText}>
+            Add a photo or video if it helps explain the situation faster. Audio is optional too, but needs a picker integration in this build.
+          </Text>
+          {!!media.photo?.name && <Text style={styles.mediaPickedText}>Photo: {media.photo.name}</Text>}
+          {!!media.video?.name && <Text style={styles.mediaPickedText}>Video: {media.video.name}</Text>}
         </View>
 
         {/* SUBMIT BUTTON */}
@@ -201,7 +228,7 @@ export default function CrimeReportScreen({ navigation, route }) {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM BAR */}
 
@@ -209,7 +236,7 @@ export default function CrimeReportScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
 
   header: {
@@ -276,6 +303,20 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   mediaLabel: { fontSize: 12, color: "#555", marginTop: 6 },
+  mediaInfoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  mediaInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
+  mediaInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
+  mediaPickedText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: ORANGE },
 
   submitButton: {
     alignSelf: "center",
@@ -319,4 +360,4 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
-});
+};

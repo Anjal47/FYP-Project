@@ -1,19 +1,25 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
-const PRIMARY_ORANGE = '#F57C00';
-const BG_COLOR = '#F5F5F5';
+const PRIMARY_ORANGE = "#F57C00";
 
 export default function ForgotPasswordScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState('');
+  const { theme, isDark } = useAppTheme();
+  const [email, setEmail] = useState("");
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   return (
     <View
@@ -33,6 +39,7 @@ export default function ForgotPasswordScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
+          placeholderTextColor={theme.muted}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -59,10 +66,10 @@ export default function ForgotPasswordScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
-    backgroundColor: BG_COLOR,
+    backgroundColor: "#F5F5F5",
     paddingHorizontal: 24,
   },
   title: {
@@ -114,4 +121,4 @@ const styles = StyleSheet.create({
     color: PRIMARY_ORANGE,
     fontWeight: '600',
   },
-});
+};

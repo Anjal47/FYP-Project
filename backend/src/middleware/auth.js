@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 module.exports = async function auth(req, res, next) {
   try {
@@ -10,8 +11,17 @@ module.exports = async function auth(req, res, next) {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("_id role isActive fullName email bio qualification workingArea phone createdAt updatedAt");
 
-    req.user = { _id: decoded.id, role: decoded.role };
+    if (!user) {
+      return res.status(401).json({ ok: false, message: "User not found" });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({ ok: false, message: "Account disabled" });
+    }
+
+    req.user = user;
     next();
   } catch (err) {
     return res.status(401).json({ ok: false, message: "Invalid token" });

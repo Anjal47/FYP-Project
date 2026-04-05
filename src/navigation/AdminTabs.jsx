@@ -5,10 +5,7 @@ import AdminDashboardScreen from "../screens/Admin/AdminDashboardScreen";
 import AdminUsersScreen from "../screens/Admin/AdminUsersScreen";
 import  AdminStaffScreen from "../screens/Admin/AdminStaffScreen";
 import  AdminReportsScreen from "../screens/Admin/AdminReportsScreen";
-
-
-
-// IMPORTANT: adjust paths to match your files inside screens/Admin
+import AdminDonationsScreen from "../screens/Admin/AdminDonationsScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -37,6 +34,7 @@ export default function AdminTabs() {
             Users: "people-outline",
             Staff: "medkit-outline",
             Reports: "warning-outline",
+            Donations: "heart-outline",
           };
           return <Ionicons name={map[route.name] || "ellipse-outline"} size={size} color={color} />;
         },
@@ -45,7 +43,8 @@ export default function AdminTabs() {
       <Tab.Screen name="Overview" component={AdminDashboardScreen} />
       <Tab.Screen name="Users" component={AdminUsersScreen} />
       <Tab.Screen name="Staff" component={AdminStaffScreen} />
-     <Tab.Screen name="AdminReports" component={AdminReportsScreen} />
+      <Tab.Screen name="Reports" component={AdminReportsScreen} />
+      <Tab.Screen name="Donations" component={AdminDonationsScreen} />
 
     </Tab.Navigator>
   );

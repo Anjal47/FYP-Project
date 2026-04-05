@@ -1,5 +1,5 @@
 // src/screens/ReportStatusScreen.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -14,6 +14,9 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
@@ -42,6 +45,7 @@ async function apiGetMyReports(token) {
 
 /* ----------------------------- Screen ----------------------------- */
 export default function ReportStatusScreen({ navigation }) {
+  const { theme, isDark } = useAppTheme();
   // ✅ ALL HOOKS ARE HERE (TOP LEVEL) — no conditionals, no duplicates
   const [reportId, setReportId] = useState("");
   const [checking, setChecking] = useState(false);
@@ -50,6 +54,10 @@ export default function ReportStatusScreen({ navigation }) {
   const [listLoading, setListLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   const getToken = async () => AsyncStorage.getItem("token");
 
@@ -296,7 +304,7 @@ export default function ReportStatusScreen({ navigation }) {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM BAR */}
 
@@ -305,7 +313,7 @@ export default function ReportStatusScreen({ navigation }) {
 }
 
 /* ----------------------------- Styles ----------------------------- */
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
   header: {
     backgroundColor: "#FFFFFF",
@@ -475,4 +483,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
-});
+};

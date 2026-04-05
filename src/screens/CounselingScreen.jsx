@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,16 @@ import {
   SafeAreaView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather"; // make sure react-native-vector-icons is installed
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const CounselingScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
@@ -17,7 +25,7 @@ const CounselingScreen = ({ navigation }) => {
           style={styles.backRow}
           onPress={() => navigation?.goBack?.()}
         >
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.title}>
             <Text style={styles.titleHighlight}> Counseling</Text>
             <Text style={styles.titleNormal}>Therapy.</Text>
@@ -31,26 +39,29 @@ const CounselingScreen = ({ navigation }) => {
 
         <View style={styles.buttonsWrapper}>
           <MenuButton
+            styles={styles}
             label="Visit Counselors"
             onPress={() => navigation.navigate("CounselingForm")}
-           arrowColor="#FF7A1A"
-            />
+            arrowColor={theme.accent}
+          />
 
           <MenuButton
+            styles={styles}
             label="Urgent Therapy"
             onPress={() => navigation.navigate("TherapyScreen")}
-            arrowColor="#111"
+            arrowColor={theme.text}
           />
           <MenuButton
+            styles={styles}
             label="Connect to NGOs"
             onPress={() => navigation?.navigate?.("ConnectToNGOs")}
-            arrowColor="#111"
+            arrowColor={theme.text}
           />
         </View>
       </View>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM TABS */}
       
@@ -58,14 +69,14 @@ const CounselingScreen = ({ navigation }) => {
   );
 };
 
-const MenuButton = ({ label, onPress, arrowColor }) => (
+const MenuButton = ({ label, onPress, arrowColor, styles }) => (
   <TouchableOpacity style={styles.menuButton} onPress={onPress}>
     <Text style={styles.menuLabel}>{label}</Text>
     <Icon name="arrow-right" size={18} color={arrowColor} />
   </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F4F4F4",
@@ -126,21 +137,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#222",
   },
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: "#FF7A1A",
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
-  },
   bottomBar: {
     position: "absolute",
     bottom: 24,
@@ -163,6 +159,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-});
+};
 
 export default CounselingScreen;

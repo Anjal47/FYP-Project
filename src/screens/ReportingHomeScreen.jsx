@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -7,10 +7,17 @@ import {
   TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 
 const ReportingHomeScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
@@ -19,7 +26,7 @@ const ReportingHomeScreen = ({ navigation }) => {
           style={styles.backRow}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.title}>
             <Text style={styles.titleHighlight}> Reporting</Text>
             <Text style={styles.titleNormal}>.</Text>
@@ -34,6 +41,7 @@ const ReportingHomeScreen = ({ navigation }) => {
         <View style={styles.grid}>
           {/* CRIME */}
           <Card
+            styles={styles}
             icon="shield"
             title="Crime Reporting"
             desc="Report crimes safely"
@@ -42,6 +50,7 @@ const ReportingHomeScreen = ({ navigation }) => {
 
           {/* WASTE (same as home behavior) */}
           <Card
+            styles={styles}
             icon="trash-2"
             title="Waste Reporting"
             desc="Garbage & sanitation"
@@ -54,6 +63,7 @@ const ReportingHomeScreen = ({ navigation }) => {
 
           {/* ROAD (same as home behavior) */}
           <Card
+            styles={styles}
             icon="alert-circle"
             title="Road Complaints"
             desc="Potholes & hazards"
@@ -69,7 +79,7 @@ const ReportingHomeScreen = ({ navigation }) => {
   );
 };
 
-const Card = ({ icon, title, desc, onPress }) => (
+const Card = ({ icon, title, desc, onPress, styles }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
     <View style={styles.iconWrap}>
       <Icon name={icon} size={20} color={ORANGE} />
@@ -84,7 +94,7 @@ const Card = ({ icon, title, desc, onPress }) => (
   </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F7F7F7" },
 
   header: {
@@ -164,6 +174,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+};
 
 export default ReportingHomeScreen;

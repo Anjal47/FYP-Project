@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -6,73 +6,103 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
   TextInput,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
-import call from "react-native-phone-call";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const HomeScreen = ({ navigation }) => {
-  const [sosNumber, setSosNumber] = useState("");
+  const { theme, isDark } = useAppTheme();
+  const [homeState, setHomeState] = useState({
+    searchQuery: "",
+  });
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
+  const { searchQuery } = homeState;
+  const query = searchQuery.trim().toLowerCase();
+  const filteredActions = query
+    ? importantActions.filter((item) => {
+        const text = `${item.title} ${item.desc}`.toLowerCase();
+        return text.includes(query);
+      })
+    : [];
 
-  const sanitizePhone = (raw) => {
-    if (!raw) return "";
-    const trimmed = raw.trim();
-    const plus = trimmed.startsWith("+") ? "+" : "";
-    const digitsOnly = trimmed.replace(/[^\d]/g, "");
-    return plus + digitsOnly;
-  };
-
-  const isValidPhone = (value) => {
-    const cleaned = sanitizePhone(value);
-    const digitCount = cleaned.replace(/[^\d]/g, "").length;
-    return digitCount >= 6;
-  };
-
-  const handleSOSPress = async () => {
-    const cleaned = sanitizePhone(sosNumber);
-
-    if (!isValidPhone(sosNumber)) {
-      Alert.alert("Invalid SOS Number", "Enter a valid phone number.");
+  const handleActionPress = (item) => {
+    if (typeof item.onPress === "function") {
+      item.onPress(navigation);
+      setHomeState((prev) => ({ ...prev, searchQuery: "" }));
       return;
     }
 
-    try {
-      await call({
-        number: cleaned,
-        prompt: true,
-        skipCanOpen: true,
-      });
-    } catch (err) {
-      Alert.alert("Call Failed", "Unable to place call.");
+    if (item.screen) {
+      navigation.navigate(item.screen);
+      setHomeState((prev) => ({ ...prev, searchQuery: "" }));
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.logo}>
-          <Text style={{ color: "#111" }}>Angel</Text>
-          <Text style={{ color: "#FF7A1A" }}>Touch.</Text>
-        </Text>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.logo}>
+            <Text style={{ color: theme.text }}>Angel</Text>
+            <Text style={{ color: "#FF7A1A" }}>Touch.</Text>
+          </Text>
+
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => navigation.navigate("Settings")}
+            activeOpacity={0.9}
+          >
+            <Icon name="settings" size={20} color={theme.text} />
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.tagline}>You are not alone</Text>
 
-        <View style={styles.inputCard}>
-          <Text style={styles.label}>Emergency Contact</Text>
+        <View style={styles.searchBar}>
+          <Icon name="search" size={18} color={theme.muted} />
           <TextInput
-            value={sosNumber}
-            onChangeText={setSosNumber}
-            placeholder="+614XXXXXXXX"
-            keyboardType="phone-pad"
-            style={styles.input}
+            value={searchQuery}
+            onChangeText={(text) =>
+              setHomeState((prev) => ({ ...prev, searchQuery: text }))
+            }
+            placeholder="Search important services"
+            placeholderTextColor={theme.muted}
+            style={styles.searchInput}
           />
         </View>
 
-        <TouchableOpacity style={styles.searchBar} activeOpacity={0.9}>
-          <Icon name="search" size={18} color="#999" />
-          <Text style={styles.searchText}>Search services</Text>
-        </TouchableOpacity>
+        {searchQuery.trim() ? (
+          <View style={styles.searchResults}>
+            {filteredActions.length ? (
+              filteredActions.map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={styles.searchResultItem}
+                  onPress={() => handleActionPress(item)}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.searchResultIcon}>
+                    <Icon name={item.icon} size={16} color="#FF7A1A" />
+                  </View>
+                  <View style={styles.searchResultCopy}>
+                    <Text style={styles.searchResultTitle}>{item.title}</Text>
+                    <Text style={styles.searchResultDesc}>{item.desc}</Text>
+                  </View>
+                  <Icon name="arrow-right" size={16} color="#FF7A1A" />
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.noResultsText}>
+                No matching service found.
+              </Text>
+            )}
+          </View>
+        ) : null}
       </View>
 
       <ScrollView
@@ -84,7 +114,7 @@ const HomeScreen = ({ navigation }) => {
             <TouchableOpacity
               key={index}
               style={styles.card}
-              onPress={() => navigation.navigate(item.screen)}
+              onPress={() => handleActionPress(item)}
               activeOpacity={0.9}
             >
               <View style={styles.iconWrap}>
@@ -96,21 +126,31 @@ const HomeScreen = ({ navigation }) => {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.sosButton} onPress={handleSOSPress}>
-          <Icon name="phone-call" size={24} color="#fff" />
-          <Text style={styles.sosText}>Emergency SOS</Text>
-        </TouchableOpacity>
+        <View style={styles.sosWrap}>
+          <TouchableOpacity
+            style={styles.sosButton}
+            onPress={() => navigation.navigate("EmergencySOS")}
+          >
+            <View style={styles.sosIconWrap}>
+              <Icon name="phone-call" size={30} color="#fff" />
+            </View>
+            <Text style={styles.sosText}>SOS</Text>
+          </TouchableOpacity>
+          <Text style={styles.sosSubtext}>
+            Fast help for police, ambulance, or your saved contact.
+          </Text>
+        </View>
 
         <View style={{ height: 140 }} />
       </ScrollView>
-
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.tab}
-          onPress={() => navigation.navigate("Settings")}
+          onPress={() => navigation.navigate("UserBookedCounseling")}
+          activeOpacity={0.85}
         >
-          <Icon name="settings" size={20} color="#999" />
-          <Text style={styles.tabText}>Settings</Text>
+          <Icon name="message-circle" size={20} color={theme.accent} />
+          <Text style={[styles.tabText, styles.chatTabText]}>Chat</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -118,7 +158,7 @@ const HomeScreen = ({ navigation }) => {
           onPress={() => navigation.navigate("Home")}
         >
           <Icon name="home" size={20} color="#FF7A1A" />
-          <Text style={[styles.tabText, { color: "#FF7A1A" }]}>Home</Text>
+          <Text style={[styles.tabText, styles.activeTabText]}>Home</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -133,17 +173,67 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-const cards = [
-  { title: "Reporting", desc: "File reports safely", icon: "file-text", screen: "ReportingHome" },
-  { title: "Counseling", desc: "Talk to a pro", icon: "message-circle", screen: "Counseling" },
-  { title: "Traffic", desc: "Live alerts", icon: "map-pin", screen: "TrafficHome" },
-  { title: "Support", desc: "Get help", icon: "help-circle", screen: "Support" },
-  { title: "Donate/Charity", desc: "Help someone today", icon: "heart", screen: "Donation" },
+const importantActions = [
+  {
+    key: "reporting",
+    title: "Reporting",
+    desc: "File important reports safely",
+    icon: "file-text",
+    screen: "ReportingHome",
+  },
+  {
+    key: "counselors",
+    title: "Visit Counselors",
+    desc: "Book support with a counselor",
+    icon: "message-circle",
+    screen: "Counseling",
+  },
+  {
+    key: "pay-fine",
+    title: "Traffic",
+    desc: "Reports, rules, and fines",
+    icon: "credit-card",
+    screen: "TrafficHome",
+  },
+  {
+    key: "support",
+    title: "Support",
+    desc: "Get help and quick assistance",
+    icon: "help-circle",
+    screen: "Support",
+  },
+  {
+    key: "donation",
+    title: "Donate / Charity",
+    desc: "Support verified requests",
+    icon: "heart",
+    screen: "Donation",
+  },
+  {
+    key: "sos",
+    title: "Emergency SOS",
+    desc: "Police, ambulance, or personal contact",
+    icon: "phone-call",
+    screen: "EmergencySOS",
+  },
+  {
+    key: "therapy",
+    title: "Urgent Therapy",
+    desc: "Reach therapy support quickly",
+    icon: "activity",
+    screen: "TherapyScreen",
+  },
 ];
+
+const cards = importantActions.filter((item) =>
+  ["reporting", "counselors", "pay-fine", "support", "donation"].includes(
+    item.key
+  )
+);
 
 export default HomeScreen;
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F7F7F7",
@@ -156,9 +246,24 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 24,
   },
 
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
   logo: {
     fontSize: 26,
     fontWeight: "700",
+  },
+
+  settingsButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#F2F2F2",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   tagline: {
@@ -167,36 +272,72 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  inputCard: {
-    backgroundColor: "#F2F2F2",
-    padding: 10,
-    borderRadius: 14,
-    marginBottom: 10,
-  },
-
-  label: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-
-  input: {
-    backgroundColor: "#fff",
-    padding: 8,
-    borderRadius: 10,
-  },
-
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F2F2F2",
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 20,
   },
 
-  searchText: {
+  searchInput: {
+    flex: 1,
     marginLeft: 10,
-    color: "#999",
+    color: "#111",
+    fontSize: 14,
+    paddingVertical: 0,
+  },
+
+  searchResults: {
+    marginTop: 10,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 18,
+    padding: 8,
+  },
+
+  searchResultItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+
+  searchResultIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFF3E8",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+
+  searchResultCopy: {
+    flex: 1,
+    paddingRight: 10,
+  },
+
+  searchResultTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#111",
+  },
+
+  searchResultDesc: {
+    fontSize: 12,
+    color: "#777",
+    marginTop: 2,
+  },
+
+  noResultsText: {
+    paddingVertical: 14,
+    textAlign: "center",
+    color: "#777",
+    fontSize: 13,
   },
 
   content: {
@@ -237,22 +378,44 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  sosButton: {
-    flexDirection: "row",
-    backgroundColor: "#FF3B30",
-    paddingVertical: 20,
-    borderRadius: 30,
-    justifyContent: "center",
+  sosWrap: {
     alignItems: "center",
     marginTop: 24,
+  },
+
+  sosButton: {
+    width: 138,
+    height: 138,
+    backgroundColor: "#FF3B30",
+    borderRadius: 69,
+    alignItems: "center",
+    justifyContent: "center",
     elevation: 6,
+  },
+
+  sosIconWrap: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   sosText: {
     color: "#fff",
     fontWeight: "800",
-    fontSize: 16,
-    marginLeft: 10,
+    fontSize: 24,
+    marginTop: 12,
+  },
+
+  sosSubtext: {
+    color: "#777",
+    fontSize: 12,
+    marginTop: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    maxWidth: 220,
   },
 
   bottomBar: {
@@ -278,4 +441,13 @@ const styles = StyleSheet.create({
     color: "#999",
     marginTop: 2,
   },
-});
+
+  chatTabText: {
+    color: "#999",
+  },
+
+  activeTabText: {
+    color: "#FF7A1A",
+    fontWeight: "600",
+  },
+};

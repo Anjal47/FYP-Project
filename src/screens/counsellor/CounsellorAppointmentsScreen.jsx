@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -9,38 +9,24 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
+import Feather from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+const ORANGE = "#FF7A1A";
+const BG = "#F4F4F4";
 const BASE_URL = "http://10.0.2.2:5000";
 
 export default function CounsellorAppointmentsScreen({ navigation }) {
-  const UI = useMemo(
-    () => ({
-      bg: "#0B0F14",
-      card: "#111826",
-      card2: "#0F172A",
-      text: "#EAF0FF",
-      mut: "rgba(234,240,255,0.68)",
-      line: "rgba(255,255,255,0.08)",
-      accent: "#FF7A1A",
-      ok: "#22C55E",
-      warn: "#F59E0B",
-      danger: "#EF4444",
-    }),
-    []
-  );
-
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [actingId, setActingId] = useState("");
 
   const badgeColor = (status) => {
-    if (status === "confirmed") return UI.ok;
-    if (status === "pending") return UI.warn;
-    if (status === "cancelled") return UI.danger;
-    if (status === "completed") return UI.ok;
-    return UI.mut;
+    if (status === "confirmed") return "#22C55E";
+    if (status === "pending") return "#F59E0B";
+    if (status === "cancelled") return "#EF4444";
+    if (status === "completed") return "#22C55E";
+    return "#999";
   };
 
   const apiGetCounsellorAppointments = async (token) => {
@@ -66,7 +52,10 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("token");
-      if (!token) return navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      if (!token) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
 
       const data = await apiGetCounsellorAppointments(token);
       setRows(data?.appointments || []);
@@ -80,7 +69,6 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
   useEffect(() => {
     const unsub = navigation.addListener("focus", load);
     return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation]);
 
   const onConfirm = (id) => {
@@ -126,35 +114,58 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
     ]);
   };
 
-  return (
-    <SafeAreaView style={[s.safe, { backgroundColor: UI.bg }]}>
-      <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
-        <View style={s.header}>
-          <TouchableOpacity style={[s.roundBtn, { borderColor: UI.line }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={20} color={UI.text} />
-          </TouchableOpacity>
+  const pendingCount = rows.filter((item) => item.status === "pending").length;
+  const confirmedCount = rows.filter((item) => item.status === "confirmed").length;
 
-          <View style={{ flex: 1, marginLeft: 10 }}>
-            <Text style={[s.title, { color: UI.text }]}>
-              Counsellor <Text style={{ color: UI.accent, fontWeight: "900" }}>Appointments</Text>
-            </Text>
-            <Text style={[s.sub, { color: UI.mut }]}>Confirm or decline pending sessions.</Text>
+  return (
+    <SafeAreaView style={s.safe}>
+      <ScrollView contentContainerStyle={s.page} showsVerticalScrollIndicator={false}>
+        <View style={s.headerCard}>
+          <View style={s.headerRow}>
+            <TouchableOpacity style={s.roundBtn} onPress={() => navigation.goBack()}>
+              <Feather name="arrow-left" size={20} color="#111" />
+            </TouchableOpacity>
+
+            <View style={s.headerCopy}>
+              <Text style={s.title}>
+                <Text style={s.titleMain}>Counsellor</Text>
+                <Text style={s.titleAccent}> Appointments.</Text>
+              </Text>
+              <Text style={s.sub}>Confirm or decline pending sessions.</Text>
+            </View>
+
+            <TouchableOpacity style={s.roundBtn} onPress={load}>
+              <Feather name="refresh-cw" size={18} color="#111" />
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={[s.roundBtn, { borderColor: UI.line }]} onPress={load}>
-            <Ionicons name="refresh" size={20} color={UI.text} />
-          </TouchableOpacity>
+          <View style={s.summaryRow}>
+            <View style={s.summaryPill}>
+              <Text style={s.summaryCount}>{rows.length}</Text>
+              <Text style={s.summaryLabel}>Total</Text>
+            </View>
+
+            <View style={s.summaryPill}>
+              <Text style={s.summaryCount}>{pendingCount}</Text>
+              <Text style={s.summaryLabel}>Pending</Text>
+            </View>
+
+            <View style={s.summaryPill}>
+              <Text style={s.summaryCount}>{confirmedCount}</Text>
+              <Text style={s.summaryLabel}>Confirmed</Text>
+            </View>
+          </View>
         </View>
 
         {loading ? (
           <View style={s.loadingBox}>
-            <ActivityIndicator size="large" color={UI.accent} />
-            <Text style={[s.loadingTxt, { color: UI.mut }]}>Loading…</Text>
+            <ActivityIndicator size="large" color={ORANGE} />
+            <Text style={s.loadingTxt}>Loading appointments...</Text>
           </View>
         ) : rows.length === 0 ? (
-          <View style={[s.empty, { borderColor: UI.line }]}>
-            <Ionicons name="sparkles-outline" size={20} color={UI.accent} />
-            <Text style={[s.emptyTxt, { color: UI.mut }]}>No appointments yet.</Text>
+          <View style={s.empty}>
+            <Feather name="calendar" size={20} color={ORANGE} />
+            <Text style={s.emptyTxt}>No appointments yet.</Text>
           </View>
         ) : (
           rows.map((x) => {
@@ -162,9 +173,9 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
             const busy = actingId === x.id;
 
             return (
-              <View key={x.id} style={[s.card, { borderColor: UI.line, backgroundColor: UI.card }]}>
+              <View key={x.id} style={s.card}>
                 <View style={s.rowTop}>
-                  <Text style={[s.client, { color: UI.text }]}>{x?.user?.fullName || "Client"}</Text>
+                  <Text style={s.client}>{x?.user?.fullName || "Client"}</Text>
 
                   <View style={[s.statusPill, { borderColor: badgeColor(x.status) }]}>
                     <View style={[s.dot, { backgroundColor: badgeColor(x.status) }]} />
@@ -174,58 +185,61 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
                   </View>
                 </View>
 
-                <Text style={[s.meta, { color: UI.mut }]}>
-                  {x.month} {x.day} • {x.slot}
-                </Text>
+                <View style={s.infoRow}>
+                  <Feather name="calendar" size={14} color={ORANGE} />
+                  <Text style={s.meta}>
+                    {x.month} {x.day} • {x.slot}
+                  </Text>
+                </View>
 
                 {!!x?.request?.problem && (
-                  <Text style={[s.problem, { color: UI.text }]}>
-                    {x.request.problem}{" "}
-                    <Text style={{ color: UI.mut, fontWeight: "700" }}>
-                      ({x.request.mode}, {x.request.language})
+                  <View style={s.infoRow}>
+                    <Feather name="activity" size={14} color={ORANGE} />
+                    <Text style={s.problem}>
+                      {x.request.problem}
+                      <Text style={s.problemMeta}>
+                        {" "}({x.request.mode}, {x.request.language})
+                      </Text>
                     </Text>
-                  </Text>
+                  </View>
                 )}
 
                 {!!x?.request?.description && (
-                  <Text style={[s.desc, { color: UI.mut }]} numberOfLines={3}>
-                    {x.request.description}
-                  </Text>
+                  <View style={s.descBox}>
+                    <Text style={s.descTitle}>Client Notes</Text>
+                    <Text style={s.desc} numberOfLines={3}>
+                      {x.request.description}
+                    </Text>
+                  </View>
                 )}
 
                 <View style={s.actions}>
                   <TouchableOpacity
                     disabled={!isPending || busy}
                     activeOpacity={0.9}
-                    style={[
-                      s.btn,
-                      { borderColor: UI.line, opacity: !isPending || busy ? 0.55 : 1 },
-                    ]}
+                    style={[s.btn, s.confirmBtn, { opacity: !isPending || busy ? 0.55 : 1 }]}
                     onPress={() => onConfirm(x.id)}
                   >
                     {busy ? (
-                      <ActivityIndicator color={UI.ok} />
+                      <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Ionicons name="checkmark" size={18} color={UI.ok} />
+                      <Feather name="check" size={18} color="#FFFFFF" />
                     )}
-                    <Text style={[s.btnTxt, { color: UI.text }]}>Confirm</Text>
+                    <Text style={s.btnTxtLight}>Confirm</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     disabled={!isPending || busy}
                     activeOpacity={0.9}
-                    style={[
-                      s.btn,
-                      { borderColor: UI.line, opacity: !isPending || busy ? 0.55 : 1 },
-                    ]}
+                    style={[s.btn, s.declineBtn, { opacity: !isPending || busy ? 0.55 : 1 }]}
                     onPress={() => onDecline(x.id)}
                   >
                     {busy ? (
-                      <ActivityIndicator color={UI.danger} />
+                      <ActivityIndicator color="#EF4444" />
                     ) : (
-                      <Ionicons name="close" size={18} color={UI.danger} />
+                      <Feather name="x" size={18} color="#EF4444" />
                     )}
-                    <Text style={[s.btnTxt, { color: UI.text }]}>Decline</Text>
+                    <Text style={s.btnTxt}>Decline</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -233,53 +247,137 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
           })
         )}
 
-        <Text style={[s.footer, { color: UI.mut }]}>
-          API used: GET /api/counseling/counsellor/appointments, PATCH /api/counseling/appointments/:id/confirm|decline
-        </Text>
+        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1 },
-  page: { padding: 16, paddingBottom: 26 },
+  safe: { flex: 1, backgroundColor: BG },
+  page: { paddingBottom: 26 },
 
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
+  headerCard: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  headerRow: { flexDirection: "row", alignItems: "center" },
   roundBtn: {
     width: 44,
     height: 44,
     borderRadius: 16,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
+    borderColor: "#EFEFEF",
     alignItems: "center",
     justifyContent: "center",
   },
+  headerCopy: { flex: 1, marginLeft: 10 },
+  title: { fontSize: 22, fontWeight: "900" },
+  titleMain: { color: "#111" },
+  titleAccent: { color: ORANGE },
+  sub: { marginTop: 2, fontSize: 12, fontWeight: "700", color: "#777" },
 
-  title: { fontSize: 18, fontWeight: "900" },
-  sub: { marginTop: 2, fontSize: 12, fontWeight: "700" },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 14,
+    gap: 10,
+  },
+  summaryPill: {
+    flex: 1,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 18,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  summaryCount: { fontSize: 18, fontWeight: "900", color: ORANGE },
+  summaryLabel: { marginTop: 2, fontSize: 11, fontWeight: "800", color: "#666" },
 
-  loadingBox: { padding: 24, alignItems: "center", gap: 10 },
-  loadingTxt: { fontWeight: "900" },
+  loadingBox: { padding: 32, alignItems: "center", gap: 10 },
+  loadingTxt: { fontWeight: "900", color: "#666" },
 
-  empty: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 },
-  emptyTxt: { fontSize: 12, fontWeight: "800" },
+  empty: {
+    marginHorizontal: 16,
+    marginTop: 18,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    elevation: 3,
+  },
+  emptyTxt: { fontSize: 13, fontWeight: "800", color: "#666" },
 
-  card: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 10 },
-
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
   rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  client: { fontSize: 14, fontWeight: "900" },
-
-  statusPill: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  client: { fontSize: 16, fontWeight: "900", color: "#111" },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
   statusTxt: { fontSize: 10, fontWeight: "900" },
   dot: { width: 8, height: 8, borderRadius: 99 },
 
-  meta: { marginTop: 8, fontSize: 12, fontWeight: "800" },
-  problem: { marginTop: 8, fontSize: 13, fontWeight: "900" },
-  desc: { marginTop: 6, fontSize: 12, fontWeight: "700", lineHeight: 18 },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+  },
+  meta: { fontSize: 13, fontWeight: "800", color: "#777" },
+  problem: { flex: 1, fontSize: 13, fontWeight: "900", color: "#111" },
+  problemMeta: { color: "#777", fontWeight: "700" },
 
-  actions: { marginTop: 12, flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  btn: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 10 },
-  btnTxt: { fontSize: 11, fontWeight: "900" },
+  descBox: {
+    marginTop: 14,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EDEDED",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  descTitle: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 6 },
+  desc: { fontSize: 12, fontWeight: "700", lineHeight: 18, color: "#777" },
 
-  footer: { marginTop: 10, fontSize: 11, fontWeight: "700", lineHeight: 16 },
+  actions: { marginTop: 14, flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  btn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  confirmBtn: { backgroundColor: ORANGE },
+  declineBtn: { backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#F3D2D2" },
+  btnTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
+  btnTxtLight: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" },
 });

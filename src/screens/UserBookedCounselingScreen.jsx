@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
@@ -222,7 +223,7 @@ export default function UserBookedCounselingScreen({ navigation }) {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* ✅ BOTTOM BAR */}
       <View style={styles.bottomBar}>

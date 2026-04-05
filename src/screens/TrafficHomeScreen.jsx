@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -7,10 +7,18 @@ import {
   TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 
 const TrafficHomeScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   const fineData = {
     _id: "69c8b6b831e935eb98196c6a",
     fineCode: "FINE-TEST-001",
@@ -26,7 +34,7 @@ const TrafficHomeScreen = ({ navigation }) => {
           style={styles.backRow}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.title}>
             <Text style={styles.titleHighlight}> Traffic</Text>
             <Text style={styles.titleNormal}>.</Text>
@@ -39,6 +47,8 @@ const TrafficHomeScreen = ({ navigation }) => {
 
         <View style={styles.cardsGrid}>
           <TrafficCard
+            styles={styles}
+            iconColor={theme.text}
             icon="alert-octagon"
             title="Report a Violation"
             subtitle="Report unsafe driving or incidents."
@@ -46,6 +56,8 @@ const TrafficHomeScreen = ({ navigation }) => {
           />
 
           <TrafficCard
+            styles={styles}
+            iconColor={theme.text}
             icon="book-open"
             title="View Traffic Rules"
             subtitle="Know your rights and duties."
@@ -53,16 +65,19 @@ const TrafficHomeScreen = ({ navigation }) => {
           />
 
           <TrafficCard
+            styles={styles}
+            iconColor={theme.text}
             icon="credit-card"
             title="Pay Fine"
             subtitle="Manage and clear penalties."
             onPress={() => {
-              console.log("NAVIGATING WITH FINE:", fineData);
               navigation.navigate("FinePayment", { fine: fineData });
             }}
           />
 
           <TrafficCard
+            styles={styles}
+            iconColor={theme.text}
             icon="file-text"
             title="Reporting"
             subtitle="See your previous submissions."
@@ -71,15 +86,15 @@ const TrafficHomeScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
     </SafeAreaView>
   );
 };
 
-const TrafficCard = ({ icon, title, subtitle, onPress }) => (
+const TrafficCard = ({ icon, title, subtitle, onPress, styles, iconColor }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
     <View style={styles.cardIconWrap}>
-      <Icon name={icon} size={20} color="#111" />
+      <Icon name={icon} size={20} color={iconColor} />
     </View>
 
     <Text style={styles.cardTitle}>{title}</Text>
@@ -91,7 +106,7 @@ const TrafficCard = ({ icon, title, subtitle, onPress }) => (
   </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
 
   header: {
@@ -187,17 +202,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-  },
-});
+};
 
 export default TrafficHomeScreen;

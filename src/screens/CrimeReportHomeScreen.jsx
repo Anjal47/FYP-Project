@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -7,10 +7,17 @@ import {
   TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 
 const CrimeReportingHomeScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -31,6 +38,7 @@ const CrimeReportingHomeScreen = ({ navigation }) => {
 
         <View style={styles.grid}>
           <Card
+            styles={styles}
             icon="shield"
             title="Domestic Violence"
             desc="Report abuse or violence"
@@ -42,6 +50,7 @@ const CrimeReportingHomeScreen = ({ navigation }) => {
           />
 
           <Card
+            styles={styles}
             icon="slash"
             title="Harassment"
             desc="Report threats or harassment"
@@ -53,6 +62,7 @@ const CrimeReportingHomeScreen = ({ navigation }) => {
           />
 
           <Card
+            styles={styles}
             icon="lock"
             title="Theft"
             desc="Report stolen items"
@@ -64,6 +74,7 @@ const CrimeReportingHomeScreen = ({ navigation }) => {
           />
 
           <Card
+            styles={styles}
             icon="monitor"
             title="Cyber Crime"
             desc="Report online abuse or scams"
@@ -73,13 +84,85 @@ const CrimeReportingHomeScreen = ({ navigation }) => {
               })
             }
           />
+
+          <Card
+            styles={styles}
+            icon="alert-triangle"
+            title="Assault"
+            desc="Report physical attack or injury"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Assault",
+              })
+            }
+          />
+
+          <Card
+            styles={styles}
+            icon="user-x"
+            title="Kidnapping"
+            desc="Report abduction or missing person risk"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Kidnapping",
+              })
+            }
+          />
+
+          <Card
+            styles={styles}
+            icon="file-text"
+            title="Fraud"
+            desc="Report cheating or financial fraud"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Fraud",
+              })
+            }
+          />
+
+          <Card
+            styles={styles}
+            icon="truck"
+            title="Human Trafficking"
+            desc="Report trafficking or forced movement"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Human Trafficking",
+              })
+            }
+          />
+
+          <Card
+            styles={styles}
+            icon="home"
+            title="Burglary"
+            desc="Report break-ins or unlawful entry"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Burglary",
+              })
+            }
+          />
+
+          <Card
+            styles={styles}
+            icon="users"
+            title="Gang Activity"
+            desc="Report organized threats or violence"
+            onPress={() =>
+              navigation.navigate("CrimeReport", {
+                category: "Gang Activity",
+              })
+            }
+          />
         </View>
       </View>
     </SafeAreaView>
   );
 };
 
-const Card = ({ icon, title, desc, onPress }) => (
+const Card = ({ icon, title, desc, onPress, styles }) => (
   <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
     <View style={styles.iconWrap}>
       <Icon name={icon} size={20} color={ORANGE} />
@@ -94,7 +177,7 @@ const Card = ({ icon, title, desc, onPress }) => (
   </TouchableOpacity>
 );
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F7F7F7",
@@ -177,6 +260,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+};
 
 export default CrimeReportingHomeScreen;

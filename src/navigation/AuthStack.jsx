@@ -1,8 +1,9 @@
 // src/navigation/AuthStack.jsx
 import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { DefaultTheme, DarkTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAppTheme } from "../context/ThemeContext";
 
 /* -------------------- AUTH SCREENS -------------------- */
 import WelcomeScreen from "../screens/WelcomeScreen";
@@ -24,6 +25,8 @@ import TrafficRulesScreen from "../screens/TrafficRulesScreen";
 
 import SettingsScreen from "../screens/SettingsScreen";
 import SupportScreen from "../screens/SupportScreen";
+import EmergencySOSScreen from "../screens/EmergencySOSScreen";
+import EmergencyContactScreen from "../screens/EmergencyContactScreen";
 
 import CrimeReportScreen from "../screens/CrimeReportScreen";
 import ReportStatusScreen from "../screens/ReportStatusScreen";
@@ -33,6 +36,7 @@ import ConnectToNGOsScreen from "../screens/ConnectToNGOsScreen";
 /* -------------------- COUNSELLOR SCREENS -------------------- */
 import CounsellorHomeScreen from "../screens/Counsellor/CounsellorHomeScreen";
 import CounsellorClientsScreen from "../screens/Counsellor/CounsellorClientsScreen";
+import CounsellorReportsScreen from "../screens/Counsellor/CounsellorReportsScreen";
 
 /* -------------------- THERAPIST SCREENS (adjust paths) -------------------- */
 import TherapistHomeScreen from "../screens/Therapist/TherapistHomeScreen";
@@ -58,6 +62,7 @@ import TherapistChatScreen from "../screens/Therapist/TherapistChatScreen";
 import FinePaymentScreen from "../Traffic/FinePaymentScreen";
 import CrimeReportingHomeScreen from "../screens/CrimeReportHomeScreen";
 import DonationScreen from "../screens/Donation/DonationScreen";
+import DonateNowScreen from "../screens/Donation/DonateNowScreen";
 
 
 const Stack = createNativeStackNavigator();
@@ -70,10 +75,12 @@ function getRoleRoute(role) {
   if (role === "counsellor") return "CounsellorHome";
   if (role === "therapist") return "TherapistHome";
   if (role === "police") return "PoliceHome";
+  if (role === "municipality") return "MunicipalityWasteDashboard";
   return "Home";
 }
 
 export default function AuthStack() {
+  const { theme, isDark } = useAppTheme();
   const [booting, setBooting] = useState(true);
   const [initialRoute, setInitialRoute] = useState("Welcome");
 
@@ -107,9 +114,24 @@ export default function AuthStack() {
 
   if (booting) return null;
 
+  const navigationTheme = {
+    ...(isDark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+      background: theme.background,
+      card: theme.surface,
+      text: theme.text,
+      border: theme.border,
+      primary: theme.accent,
+    },
+  };
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+    <NavigationContainer theme={navigationTheme}>
+      <Stack.Navigator
+        initialRouteName={initialRoute}
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}
+      >
         {/* AUTH */}
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -141,6 +163,11 @@ export default function AuthStack() {
         <Stack.Screen name="CrimeReport" component={CrimeReportScreen} />
         <Stack.Screen name="ReportStatus" component={ReportStatusScreen} />
         <Stack.Screen name="Support" component={SupportScreen} />
+        <Stack.Screen name="EmergencySOS" component={EmergencySOSScreen} />
+        <Stack.Screen
+          name="EmergencyContact"
+          component={EmergencyContactScreen}
+        />
         <Stack.Screen name="ConnectToNGOs" component={ConnectToNGOsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
@@ -149,6 +176,7 @@ export default function AuthStack() {
         <Stack.Screen name="FinePayment" component={FinePaymentScreen} />
         <Stack.Screen name="CrimeReportingHome" component={CrimeReportingHomeScreen} />
         <Stack.Screen name="Donation" component={DonationScreen} />
+        <Stack.Screen name="DonateNow" component={DonateNowScreen} />
 
 
 <Stack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
@@ -158,6 +186,7 @@ export default function AuthStack() {
         {/* COUNSELLOR */}
         <Stack.Screen name="CounsellorHome" component={CounsellorHomeScreen} />
         <Stack.Screen name="CounsellorClients" component={CounsellorClientsScreen} />
+          <Stack.Screen name="CounsellorReports" component={CounsellorReportsScreen} />
           <Stack.Screen name="CounsellorAppointments" component={CounsellorAppointmentsScreen} />
 
         {/* THERAPIST */}
@@ -185,6 +214,3 @@ export default function AuthStack() {
  * In your paste you had CounselorsScreen import correct,
  * BUT I’m preventing a common typo crash.
  */
-function CounelorsScreenFix(props) {
-  return <CounselorsScreen {...props} />;
-}

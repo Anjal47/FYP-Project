@@ -1,5 +1,5 @@
 // src/screens/TrafficRulesScreen.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -9,6 +9,9 @@ import {
   ScrollView,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const rules = [
   {
@@ -74,9 +77,59 @@ const rules = [
     bodyNp:
       "रातो बत्ती, रोक्ने संकेत, वन-वे, नो-पार्किङ, स्कूल-जोन जस्ता सबै संकेत तथा बोर्डहरूको पालन अनिवार्य छ।",
   },
+  {
+    id: 8,
+    titleEn: "Do not overload passengers or goods vehicles.",
+    bodyEn:
+      "Vehicles must not carry more passengers or goods than their legal capacity because overloading increases accident risk.",
+    titleNp: "Yatayat sadhan lai kshamata bhanda badi load nagarnuhos.",
+    bodyNp:
+      "Kanun le tokeyeko sima bhanda badi yatri wa samaan boknu hudaina, kinaki yasle durghatana ko jokhim badhauncha.",
+  },
+  {
+    id: 9,
+    titleEn: "Use indicators before turning, overtaking or changing lanes.",
+    bodyEn:
+      "Drivers should signal clearly before turning, overtaking, stopping or shifting lanes so other road users can react safely.",
+    titleNp: "Modnu, overtake garnu wa lane phernu aghi indicator dinuhos.",
+    bodyNp:
+      "Baen daen modnu, roknu wa lane phernu bhanda aghi spasta sanket dinu parchha jasle anya sadak prayogakarta lai surakshit pratikriya dina madad garcha.",
+  },
+  {
+    id: 10,
+    titleEn: "Keep a safe distance from the vehicle ahead.",
+    bodyEn:
+      "Maintain enough braking distance, especially during rain, fog, night driving and heavy traffic, to avoid rear-end collisions.",
+    titleNp: "Agadiko sadhansanga surakshit duri kayam rakhnu hos.",
+    bodyNp:
+      "Barsa, kuhiro, rati wa bhid bhayeko samayama agadiko sadhansanga paryapta duri rakhnu parchha taki pachhadi bata thokkinne durghatana nahos.",
+  },
+  {
+    id: 11,
+    titleEn: "Give way to emergency vehicles.",
+    bodyEn:
+      "Ambulances, fire engines and police vehicles using sirens or emergency lights must be given immediate right of way.",
+    titleNp: "Aakasmik sewaka sawarilai rasta dinuhos.",
+    bodyNp:
+      "Siren wa emergency light balera aaune ambulance, fire brigade ra police sawari lai turuntai rasta chhodnu parchha.",
+  },
+  {
+    id: 12,
+    titleEn: "Park only in permitted areas.",
+    bodyEn:
+      "Avoid parking on footpaths, intersections, bridges, narrow roads or no-parking zones because it blocks traffic and creates hazards.",
+    titleNp: "Anumati diyeko thauma matra parking garnuhos.",
+    bodyNp:
+      "Footpath, chowk, pul, sanghuro bato wa no-parking zone ma sawari rakhnu hudaina kinaki yasle yatayat awarodh ra jokhim srijana garcha.",
+  },
 ];
 
 const TrafficRulesScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   const handleHomePress = () => navigation.navigate("Home");
 
   return (
@@ -124,7 +177,7 @@ const TrafficRulesScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM BAR */}
      
@@ -134,7 +187,7 @@ const TrafficRulesScreen = ({ navigation }) => {
 
 export default TrafficRulesScreen;
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
 
   header: {
@@ -256,4 +309,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
-});
+};

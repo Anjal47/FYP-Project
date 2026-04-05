@@ -1,5 +1,5 @@
 // src/screens/CounselingFormScreen.jsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -15,6 +15,9 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
@@ -41,6 +44,7 @@ async function apiCreateCounselingRequest(token, payload) {
 }
 
 const CounselingFormScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
   // form values
   const [problem, setProblem] = useState("");
   const [age, setAge] = useState("");
@@ -57,6 +61,10 @@ const CounselingFormScreen = ({ navigation }) => {
 
   const [submitting, setSubmitting] = useState(false);
   const [bookedLoading, setBookedLoading] = useState(false);
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   const closeAllDropdowns = () => {
     setProblemOpen(false);
@@ -139,7 +147,7 @@ const CounselingFormScreen = ({ navigation }) => {
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.headerTitle}> Counseling</Text>
         </TouchableOpacity>
       </View>
@@ -166,7 +174,7 @@ const CounselingFormScreen = ({ navigation }) => {
             <Text style={[styles.placeholder, problem ? styles.selectedValue : null]}>
               {problem || "Problem..."}
             </Text>
-            <Icon name={problemOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
+            <Icon name={problemOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
           </TouchableOpacity>
           {problemOpen && (
             <View style={styles.dropdownList}>
@@ -192,7 +200,7 @@ const CounselingFormScreen = ({ navigation }) => {
               <TextInput
                 style={styles.input}
                 placeholder="XX"
-                placeholderTextColor="#B0B0B0"
+                placeholderTextColor={theme.muted}
                 keyboardType="numeric"
                 value={age}
                 onChangeText={setAge}
@@ -212,7 +220,7 @@ const CounselingFormScreen = ({ navigation }) => {
                 <Text style={[styles.placeholder, gender ? styles.selectedValue : null]}>
                   {gender || "Select..."}
                 </Text>
-                <Icon name={genderOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
+                <Icon name={genderOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
               </TouchableOpacity>
               {genderOpen && (
                 <View style={styles.dropdownList}>
@@ -246,7 +254,7 @@ const CounselingFormScreen = ({ navigation }) => {
             <Text style={[styles.placeholder, language ? styles.selectedValue : null]}>
               {language || "Language..."}
             </Text>
-            <Icon name={languageOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
+            <Icon name={languageOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
           </TouchableOpacity>
           {languageOpen && (
             <View style={styles.dropdownList}>
@@ -278,7 +286,7 @@ const CounselingFormScreen = ({ navigation }) => {
             <Text style={[styles.placeholder, mode ? styles.selectedValue : null]}>
               {mode || "Mode of Communication..."}
             </Text>
-            <Icon name={modeOpen ? "chevron-up" : "chevron-down"} size={18} color="#666" />
+            <Icon name={modeOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
           </TouchableOpacity>
           {modeOpen && (
             <View style={styles.dropdownList}>
@@ -302,7 +310,7 @@ const CounselingFormScreen = ({ navigation }) => {
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Enter Description..."
-            placeholderTextColor="#B0B0B0"
+            placeholderTextColor={theme.muted}
             multiline
             value={description}
             onChangeText={setDescription}
@@ -347,12 +355,12 @@ const CounselingFormScreen = ({ navigation }) => {
       </KeyboardAvoidingView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* ✅ BOTTOM BAR */}
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.tabItem} onPress={handleSettingsPress} activeOpacity={0.8}>
-          <Icon name="settings" size={20} color="#9A9A9A" />
+          <Icon name="settings" size={20} color={theme.muted} />
           <Text style={styles.tabLabel}>Settings</Text>
         </TouchableOpacity>
 
@@ -364,7 +372,7 @@ const CounselingFormScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress} activeOpacity={0.8}>
-          <Icon name="user" size={20} color="#9A9A9A" />
+          <Icon name="user" size={20} color={theme.muted} />
           <Text style={styles.tabLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -374,7 +382,7 @@ const CounselingFormScreen = ({ navigation }) => {
 
 export default CounselingFormScreen;
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
 
   header: {
@@ -531,4 +539,4 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 11, color: "#9A9A9A", marginTop: 2 },
   tabLabelActive: { color: ORANGE, fontWeight: "600" },
-});
+};

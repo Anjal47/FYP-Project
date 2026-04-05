@@ -21,7 +21,7 @@ import { Platform } from "react-native";
 
 import { adminGET, BASE_URL } from "../../utils/adminApi";
 
-const ORANGE = "#FF7A1A";
+const ORANGE = "#7C3AED";
 
 /**
  * ✅ Admin Reports Screen (VIEW ONLY)
@@ -33,11 +33,11 @@ const ORANGE = "#FF7A1A";
 export default function AdminReportsScreen({ navigation }) {
   const UI = useMemo(
     () => ({
-      bg: "#F4F4F4",
-      card: "#FFFFFF",
-      text: "#111",
-      mut: "#555",
-      line: "#E3E3E3",
+      bg: "#0B0F14",
+      card: "#111826",
+      text: "#EAF0FF",
+      mut: "rgba(234,240,255,0.68)",
+      line: "rgba(255,255,255,0.08)",
       orange: ORANGE,
     }),
     []
@@ -185,20 +185,20 @@ export default function AdminReportsScreen({ navigation }) {
 
         {/* Search */}
         <View style={s.searchRow}>
-          <Icon name="search" size={16} color="#777" />
+          <Icon name="search" size={16} color={UI.mut} />
           <TextInput
             value={q}
             onChangeText={setQ}
             placeholder="Search by report code, type, area..."
-            placeholderTextColor="#B0B0B0"
-            style={s.searchInput}
+            placeholderTextColor="rgba(234,240,255,0.38)"
+            style={[s.searchInput, { color: UI.text }]}
             onSubmitEditing={() => load(true)}
             returnKeyType="search"
           />
 
           {!!q && (
             <TouchableOpacity onPress={() => setQ("")} activeOpacity={0.8}>
-              <Icon name="x-circle" size={18} color="#888" />
+              <Icon name="x-circle" size={18} color={UI.mut} />
             </TouchableOpacity>
           )}
 
@@ -321,8 +321,6 @@ export default function AdminReportsScreen({ navigation }) {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ORANGE SIDE PILL */}
-      <View style={s.sidePill} />
     </SafeAreaView>
   );
 }
@@ -331,7 +329,7 @@ const s = StyleSheet.create({
   container: { flex: 1 },
 
   header: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0B0F14",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderBottomWidth: 0.5,
@@ -348,7 +346,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111826",
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -363,22 +361,22 @@ const s = StyleSheet.create({
 
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
   chip: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111826",
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: "#E3E3E3",
+    borderColor: "rgba(255,255,255,0.08)",
   },
   chipActive: {
     borderColor: ORANGE,
-    backgroundColor: "#FFF4E8",
+    backgroundColor: "rgba(124,58,237,0.14)",
   },
-  chipText: { fontSize: 12, fontWeight: "900", color: "#777" },
-  chipTextActive: { color: "#111" },
+  chipText: { fontSize: 12, fontWeight: "900", color: "rgba(234,240,255,0.68)" },
+  chipTextActive: { color: "#EAF0FF" },
 
   loadingBox: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111826",
     borderRadius: 18,
     padding: 14,
     alignItems: "center",
@@ -388,10 +386,10 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  loadingText: { marginTop: 10, fontSize: 12, fontWeight: "800", color: "#555" },
+  loadingText: { marginTop: 10, fontSize: 12, fontWeight: "800", color: "rgba(234,240,255,0.68)" },
 
   emptyBox: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111826",
     borderRadius: 18,
     padding: 14,
     flexDirection: "row",
@@ -403,10 +401,10 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  emptyText: { fontSize: 12, fontWeight: "700", color: "#555" },
+  emptyText: { fontSize: 12, fontWeight: "700", color: "rgba(234,240,255,0.68)" },
 
   reportRow: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#111826",
     borderRadius: 18,
     padding: 14,
     marginBottom: 10,
@@ -418,14 +416,14 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  reportCode: { fontSize: 13, fontWeight: "900", color: "#111" },
-  reportMeta: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#555" },
-  reportDesc: { marginTop: 4, fontSize: 12, color: "#777" },
-  reportTime: { marginTop: 6, fontSize: 11, fontWeight: "700", color: "#999" },
+  reportCode: { fontSize: 13, fontWeight: "900", color: "#EAF0FF" },
+  reportMeta: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#EAF0FF" },
+  reportDesc: { marginTop: 4, fontSize: 12, color: "rgba(234,240,255,0.68)" },
+  reportTime: { marginTop: 6, fontSize: 11, fontWeight: "700", color: "rgba(234,240,255,0.68)" },
 
   assignedRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 },
-  assignedText: { fontSize: 12, fontWeight: "800", color: "#111", flex: 1 },
-  assignedMuted: { fontSize: 12, fontWeight: "800", color: "#777", flex: 1 },
+  assignedText: { fontSize: 12, fontWeight: "800", color: "#EAF0FF", flex: 1 },
+  assignedMuted: { fontSize: 12, fontWeight: "800", color: "rgba(234,240,255,0.68)", flex: 1 },
 
   pill: {
     flexDirection: "row",
@@ -443,26 +441,10 @@ const s = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 14,
-    backgroundColor: "#FFF4E8",
+    backgroundColor: "#0F172A",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.06)",
-  },
-
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
+    borderColor: "rgba(255,255,255,0.08)",
   },
 });

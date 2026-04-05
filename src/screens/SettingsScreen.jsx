@@ -1,5 +1,4 @@
-// src/screens/SettingsScreen.jsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -11,25 +10,99 @@ import {
   Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import { useAppTheme } from "../context/ThemeContext";
 
-const SettingsScreen = ({ navigation }) => {
+export default function SettingsScreen({ navigation }) {
+  const { isDark, setThemeMode, theme } = useAppTheme();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [language, setLanguage] = useState("English");
-  const [isDark, setIsDark] = useState(false); // local only – does not change whole app yet
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: theme.background,
+        },
+        header: {
+          backgroundColor: theme.surface,
+          paddingHorizontal: 24,
+          paddingVertical: 12,
+          borderBottomWidth: 0.5,
+          borderBottomColor: theme.border,
+        },
+        backRow: {
+          flexDirection: "row",
+          alignItems: "center",
+        },
+        headerTitle: {
+          fontSize: 20,
+          fontWeight: "700",
+          color: theme.accent,
+          marginLeft: 8,
+        },
+        body: {
+          flex: 1,
+        },
+        content: {
+          paddingHorizontal: 24,
+          paddingTop: 18,
+          paddingBottom: 60,
+        },
+        item: {
+          backgroundColor: theme.surface,
+          borderRadius: 18,
+          paddingHorizontal: 18,
+          paddingVertical: 14,
+          marginBottom: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          shadowColor: "#000",
+          shadowOpacity: isDark ? 0.16 : 0.08,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
+        },
+        itemTitle: {
+          fontSize: 16,
+          color: theme.text,
+          fontWeight: "600",
+        },
+        itemSubtitle: {
+          fontSize: 12,
+          color: theme.muted,
+          marginTop: 2,
+        },
+        logoutButton: {
+          marginTop: 24,
+          alignSelf: "center",
+          backgroundColor: theme.accent,
+          paddingHorizontal: 60,
+          paddingVertical: 14,
+          borderRadius: 24,
+          shadowColor: "#000",
+          shadowOpacity: 0.18,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 3 },
+          elevation: 4,
+        },
+        logoutText: {
+          color: "#FFFFFF",
+          fontSize: 16,
+          fontWeight: "700",
+        },
+      }),
+    [theme, isDark]
+  );
 
   const handleLanguagePress = () => {
     Alert.alert(
       "Choose Language",
       "",
       [
-        {
-          text: "English",
-          onPress: () => setLanguage("English"),
-        },
-        {
-          text: "नेपाली (Nepali)",
-          onPress: () => setLanguage("Nepali"),
-        },
+        { text: "English", onPress: () => setLanguage("English") },
+        { text: "Nepali", onPress: () => setLanguage("Nepali") },
         { text: "Cancel", style: "cancel" },
       ],
       { cancelable: true }
@@ -58,25 +131,20 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backRow}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={20} color="#111" />
+        <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.headerTitle}> Settings</Text>
         </TouchableOpacity>
       </View>
 
-      {/* BODY */}
       <ScrollView
         style={styles.body}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Notifications */}
         <SettingsItem
+          styles={styles}
           title="Notifications"
           subtitle={notificationsEnabled ? "Enabled" : "Disabled"}
           rightComponent={
@@ -84,35 +152,35 @@ const SettingsScreen = ({ navigation }) => {
               value={notificationsEnabled}
               onValueChange={setNotificationsEnabled}
               trackColor={{ false: "#DDD", true: "#FFB278" }}
-              thumbColor={notificationsEnabled ? "#FF7A1A" : "#FFFFFF"}
+              thumbColor={notificationsEnabled ? theme.accent : "#FFFFFF"}
             />
           }
         />
 
-        {/* Language */}
         <SettingsItem
+          styles={styles}
           title="Language"
           subtitle={language}
           onPress={handleLanguagePress}
-          rightComponent={<Icon name="chevron-right" size={18} color="#555" />}
+          rightComponent={<Icon name="chevron-right" size={18} color={theme.muted} />}
         />
 
-        {/* Theme (Dark / Light) – local toggle only */}
         <SettingsItem
+          styles={styles}
           title="Theme"
           subtitle={isDark ? "Dark mode" : "Light mode"}
           rightComponent={
             <Switch
               value={isDark}
-              onValueChange={setIsDark}
+              onValueChange={(value) => setThemeMode(value ? "dark" : "light")}
               trackColor={{ false: "#DDD", true: "#FFB278" }}
-              thumbColor={isDark ? "#FF7A1A" : "#FFFFFF"}
+              thumbColor={isDark ? theme.accent : "#FFFFFF"}
             />
           }
         />
 
-        {/* Set Location (kept simple) */}
         <SettingsItem
+          styles={styles}
           title="Set Location"
           subtitle="Use device location for nearby help"
           onPress={() =>
@@ -121,131 +189,45 @@ const SettingsScreen = ({ navigation }) => {
               "Location settings coming soon.\nYou can later allow GPS to find nearby support."
             )
           }
-          rightComponent={<Icon name="chevron-right" size={18} color="#555" />}
+          rightComponent={<Icon name="chevron-right" size={18} color={theme.muted} />}
         />
 
-        {/* Policy */}
         <SettingsItem
+          styles={styles}
+          title="Emergency Contact"
+          subtitle="Add or update your personal SOS number"
+          onPress={() => navigation.navigate("EmergencyContact")}
+          rightComponent={<Icon name="chevron-right" size={18} color={theme.muted} />}
+        />
+
+        <SettingsItem
+          styles={styles}
           title="Policy"
           subtitle="Read AngelTouch safety & privacy rules"
           onPress={handlePolicy}
-          rightComponent={<Icon name="chevron-right" size={18} color="#555" />}
+          rightComponent={<Icon name="chevron-right" size={18} color={theme.muted} />}
         />
 
-        {/* Log Out button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
     </SafeAreaView>
   );
-};
+}
 
-const SettingsItem = ({ title, subtitle, onPress, rightComponent }) => (
-  <TouchableOpacity
-    style={styles.item}
-    activeOpacity={onPress ? 0.7 : 1}
-    onPress={onPress}
-  >
-    <View>
-      <Text style={styles.itemTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.itemSubtitle}>{subtitle}</Text> : null}
-    </View>
-    <View>{rightComponent}</View>
-  </TouchableOpacity>
-);
-
-export default SettingsScreen;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F4F4F4",
-  },
-  header: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E3E3E3",
-  },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#FF7A1A",
-    marginLeft: 8,
-  },
-  body: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 140,
-  },
-  item: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    marginBottom: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  itemTitle: {
-    fontSize: 16,
-    color: "#111",
-    fontWeight: "600",
-  },
-  itemSubtitle: {
-    fontSize: 12,
-    color: "#777",
-    marginTop: 2,
-  },
-  logoutButton: {
-    marginTop: 24,
-    alignSelf: "center",
-    backgroundColor: "#FF7A1A",
-    paddingHorizontal: 60,
-    paddingVertical: 14,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  logoutText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: "#FF7A1A",
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
-  },
-});
+function SettingsItem({ title, subtitle, onPress, rightComponent, styles }) {
+  return (
+    <TouchableOpacity
+      style={styles.item}
+      activeOpacity={onPress ? 0.7 : 1}
+      onPress={onPress}
+    >
+      <View>
+        <Text style={styles.itemTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.itemSubtitle}>{subtitle}</Text> : null}
+      </View>
+      <View>{rightComponent}</View>
+    </TouchableOpacity>
+  );
+}

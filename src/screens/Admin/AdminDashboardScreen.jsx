@@ -136,19 +136,23 @@ export default function AdminDashboardScreen({ navigation }) {
                 onPress={() => navigation.navigate("Reports")}
               />
 
+              <ActionRow
+                UI={UI}
+                icon="heart-outline"
+                title="Review Donations"
+                subtitle="Approve or reject charity requests"
+                onPress={() => navigation.navigate("Donations")}
+              />
+
               {/* ✅ NEW: Waste reports */}
               <ActionRow
                 UI={UI}
                 icon="trash-outline"
                 title="Waste Reports"
                 subtitle="Only waste management cases (assign municipality)"
-                onPress={() => navigation.navigate("WasteReports")}
+                onPress={() => navigation.navigate("MunicipalityWasteDashboard")}
               />
             </View>
-
-            <Text style={[s.footer, { color: UI.mut }]}>
-              Tip: keep backend protected with requireRole("admin") — frontend is just the cute velvet rope. 💅🌈
-            </Text>
           </>
         )}
       </ScrollView>
@@ -215,6 +219,4 @@ const s = StyleSheet.create({
 
   rowTitle: { fontSize: 14, fontWeight: "900" },
   rowSub: { fontSize: 12, marginTop: 3, fontWeight: "700" },
-
-  footer: { marginTop: 12, fontSize: 12, lineHeight: 17 },
 });

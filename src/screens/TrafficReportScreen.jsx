@@ -2,7 +2,7 @@
 // ✅ Traffic report submit screen
 // ✅ Now shows Report Code after submit + button to jump to TrafficReportStatus (prefilled)
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -15,37 +15,47 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
-const BASE_URL = "http://10.0.2.2:5000";
-
-/* ----------------------------- API ----------------------------- */
-async function apiCreateReport(token, payload) {
-  const res = await fetch(`${BASE_URL}/api/reports`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload || {}),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
-  return data;
-}
 
 /* ----------------------------- Screen ----------------------------- */
 export default function TrafficReportScreen({ navigation }) {
+  const { theme, isDark } = useAppTheme();
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [media, setMedia] = useState({ photo: null, video: null });
   const [submitting, setSubmitting] = useState(false);
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   const getToken = async () => AsyncStorage.getItem("token");
 
   const handleBack = () => navigation?.goBack?.();
-  const handleHomePress = () => navigation.navigate("Home");
+  const onPickPhoto = async () => {
+    try {
+      const file = await pickReportPhoto();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, photo: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick image");
+    }
+  };
 
+  const onPickVideo = async () => {
+    try {
+      const file = await pickReportVideo();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, video: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick video");
+    }
+  };
   // ✅ Extract report code from different possible backend response shapes
   const pickReportCode = (resp) => {
     return (
@@ -93,7 +103,7 @@ export default function TrafficReportScreen({ navigation }) {
       };
 
       // ✅ Capture backend response to get report code
-      const resp = await apiCreateReport(token, payload);
+      const resp = await createReportRequest(token, payload, media);
       const reportCode = pickReportCode(resp) || "N/A";
 
       Alert.alert(
@@ -104,6 +114,7 @@ export default function TrafficReportScreen({ navigation }) {
             text: "Check Status",
             onPress: () => {
               resetForm();
+              setMedia({ photo: null, video: null });
               // ✅ Go to Traffic report status screen + prefill
               navigation.navigate("TrafficReportStatus", { reportCode });
             },
@@ -113,6 +124,7 @@ export default function TrafficReportScreen({ navigation }) {
             style: "cancel",
             onPress: () => {
               resetForm();
+              setMedia({ photo: null, video: null });
               handleBack();
             },
           },
@@ -130,7 +142,7 @@ export default function TrafficReportScreen({ navigation }) {
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backRow} onPress={handleBack}>
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.title}>
             <Text style={styles.titleHighlight}> Traffic</Text>
             <Text style={styles.titleNormal}>Report.</Text>
@@ -143,7 +155,7 @@ export default function TrafficReportScreen({ navigation }) {
         <TextInput
           style={styles.descriptionInput}
           placeholder="Enter Description..."
-          placeholderTextColor="#9A9A9A"
+          placeholderTextColor={theme.muted}
           multiline
           value={description}
           onChangeText={setDescription}
@@ -153,16 +165,42 @@ export default function TrafficReportScreen({ navigation }) {
         <TextInput
           style={styles.locationBox}
           placeholder="Type address / landmark..."
-          placeholderTextColor="#9A9A9A"
+          placeholderTextColor={theme.muted}
           multiline
           value={location}
           onChangeText={setLocation}
         />
 
         <View style={styles.mediaRow}>
-          <MediaButton label="Image" onPress={() => Alert.alert("Later", "Image upload next step")} />
-          <MediaButton label="Audio" onPress={() => Alert.alert("Later", "Audio upload next step")} />
-          <MediaButton label="Video" onPress={() => Alert.alert("Later", "Video upload next step")} />
+          <MediaButton
+            label={media.photo ? "Change Image" : "Image"}
+            onPress={onPickPhoto}
+            styles={styles}
+          />
+          <MediaButton
+            label="Audio"
+            styles={styles}
+            onPress={() =>
+              Alert.alert(
+                "Audio picker not ready",
+                "Audio upload is supported on the backend, but this app needs a document picker library to choose audio files."
+              )
+            }
+          />
+          <MediaButton
+            label={media.video ? "Change Video" : "Video"}
+            onPress={onPickVideo}
+            styles={styles}
+          />
+        </View>
+
+        <View style={styles.mediaInfoBox}>
+          <Text style={styles.mediaInfoTitle}>Optional evidence</Text>
+          <Text style={styles.mediaInfoText}>
+            You can submit the report without media, but photo or video evidence helps with review.
+          </Text>
+          {!!media.photo?.name && <Text style={styles.mediaPickedText}>Photo: {media.photo.name}</Text>}
+          {!!media.video?.name && <Text style={styles.mediaPickedText}>Video: {media.video.name}</Text>}
         </View>
 
         <TouchableOpacity
@@ -188,7 +226,7 @@ export default function TrafficReportScreen({ navigation }) {
       </View>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM TABS */}
 
@@ -197,7 +235,7 @@ export default function TrafficReportScreen({ navigation }) {
 }
 
 /* ----------------------------- Components ----------------------------- */
-function MediaButton({ label, onPress }) {
+function MediaButton({ label, onPress, styles }) {
   return (
     <TouchableOpacity style={styles.mediaButton} onPress={onPress} activeOpacity={0.9}>
       <Text style={styles.mediaLabel}>{label}</Text>
@@ -206,7 +244,7 @@ function MediaButton({ label, onPress }) {
 }
 
 /* ----------------------------- Styles ----------------------------- */
-const styles = StyleSheet.create({
+const baseStyles = {
   container: { flex: 1, backgroundColor: "#F4F4F4" },
 
   header: {
@@ -276,6 +314,20 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   mediaLabel: { fontSize: 13, fontWeight: "600", color: "#111" },
+  mediaInfoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  mediaInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
+  mediaInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
+  mediaPickedText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: ORANGE },
 
   submitBtn: {
     marginTop: 6,
@@ -328,4 +380,4 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
-});
+};

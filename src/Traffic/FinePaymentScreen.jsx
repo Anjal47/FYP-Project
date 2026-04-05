@@ -35,10 +35,6 @@ const FinePaymentScreen = ({ route }) => {
     try {
       const fineId = fine?._id;
 
-      console.log("ROUTE PARAMS:", route?.params);
-      console.log("CURRENT FINE:", fine);
-      console.log("FINE ID:", fineId);
-
       if (!fineId) {
         Alert.alert("Error", "Fine ID missing");
         return;

@@ -17,6 +17,9 @@ const ReportSchema = new mongoose.Schema(
     type: { type: String, required: true, trim: true },
     area: { type: String, required: true, trim: true },
     description: { type: String, default: "", trim: true },
+    photoUrl: { type: String, default: "" },
+    videoUrl: { type: String, default: "" },
+    audioUrl: { type: String, default: "" },
 
     status: { type: String, enum: ["Open", "Assigned", "Resolved"], default: "Open", index: true },
     priority: { type: String, enum: ["Low", "Medium", "High"], default: "Medium", index: true },

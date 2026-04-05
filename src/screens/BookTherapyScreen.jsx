@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FloatingHelpChat from "../components/FloatingHelpChat";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000"; // Android emulator
@@ -402,7 +403,7 @@ export default function BookTherapyScreen({ navigation, route }) {
         </TouchableOpacity>
       </ScrollView>
 
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
     </SafeAreaView>
   );
 }

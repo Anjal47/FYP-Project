@@ -3,9 +3,9 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 /* ================= TOKEN ================= */
-function signToken(id) {
+function signToken(id, role) {
   return jwt.sign(
-    { id },
+    { id, role },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
   );
@@ -70,7 +70,7 @@ exports.registerUser = async (req, res, next) => {
       role: "user",
     });
 
-    const token = signToken(user._id.toString());
+    const token = signToken(user._id.toString(), user.role);
 
     return res.status(201).json({
       ok: true,
@@ -117,7 +117,7 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    const token = signToken(user._id.toString());
+    const token = signToken(user._id.toString(), user.role);
 
     return res.json({
       ok: true,

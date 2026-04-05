@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
 
-const BASE_URL = "http://10.0.2.2:5000";
 const ORANGE = "#FF7A1A";
 
 /**
@@ -21,30 +21,15 @@ const ORANGE = "#FF7A1A";
  * - Waste Management
  * - Road Complaint
  */
-async function apiCreateReport(token, payload) {
-  const res = await fetch(`${BASE_URL}/api/reports`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload || {}),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
-  return data;
-}
-
-export default function MunicipalityReportCreateScreen({ navigation }) {
-  // ✅ gets params from navigation (works with your Home navigation.navigate(..., {initialCategory}))
-  const initialCategory =
-    navigation?.getState?.()?.routes?.slice(-1)?.[0]?.params?.initialCategory;
+export default function MunicipalityReportCreateScreen({ navigation, route }) {
+  const initialCategory = route?.params?.initialCategory || route?.params?.category;
 
   const [category, setCategory] = useState(initialCategory || "Waste Management");
 
   const [area, setArea] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
+  const [media, setMedia] = useState({ photo: null, video: null });
   const [submitting, setSubmitting] = useState(false);
 
   const typeValue = useMemo(() => {
@@ -55,6 +40,26 @@ export default function MunicipalityReportCreateScreen({ navigation }) {
   const canSubmit = useMemo(() => {
     return String(area || "").trim().length >= 2;
   }, [area]);
+
+  const onPickPhoto = async () => {
+    try {
+      const file = await pickReportPhoto();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, photo: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick image");
+    }
+  };
+
+  const onPickVideo = async () => {
+    try {
+      const file = await pickReportVideo();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, video: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick video");
+    }
+  };
 
   const chip = (label, active, onPress, iconName) => (
     <TouchableOpacity
@@ -92,14 +97,24 @@ export default function MunicipalityReportCreateScreen({ navigation }) {
         priority,
       };
 
-      const out = await apiCreateReport(token, payload);
+      const out = await createReportRequest(token, payload, media);
 
       Alert.alert(
         "Submitted ✅",
         `Your report has been created.\n\nReport Code: ${out?.report?.reportCode || "N/A"}`,
         [
-          { text: "OK", onPress: () => navigation.goBack?.() },
-          { text: "View My Reports", onPress: () => navigation.navigate?.("MyReports") },
+          {
+            text: "OK",
+            onPress: () => {
+              setMedia({ photo: null, video: null });
+              navigation.goBack?.();
+            },
+          },
+          {
+            text: "View My Reports",
+            onPress: () =>
+              navigation.navigate?.(typeValue === "waste management" ? "WasteReportStatus" : "ReportStatus"),
+          },
         ]
       );
     } catch (e) {
@@ -183,6 +198,41 @@ export default function MunicipalityReportCreateScreen({ navigation }) {
             multiline
             style={s.textarea}
           />
+        </View>
+
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Media Evidence (optional)</Text>
+          <Text style={s.cardHint}>
+            Attach a photo or video if it helps explain the problem. Audio support is prepared on the backend but still needs a picker in the app.
+          </Text>
+
+          <View style={s.rowWrap}>
+            {chip(media.photo ? "Change Photo" : "Photo", false, onPickPhoto, "image-outline")}
+            {chip(
+              "Audio",
+              false,
+              () =>
+                Alert.alert(
+                  "Audio picker not ready",
+                  "Audio upload is supported on the backend, but this app needs a document picker library to choose audio files."
+                ),
+              "mic-outline"
+            )}
+            {chip(media.video ? "Change Video" : "Video", false, onPickVideo, "videocam-outline")}
+          </View>
+
+          {!!media.photo?.name && (
+            <View style={s.mediaMetaRow}>
+              <Ionicons name="checkmark-circle" size={16} color={ORANGE} />
+              <Text style={s.mediaMetaText}>Photo: {media.photo.name}</Text>
+            </View>
+          )}
+          {!!media.video?.name && (
+            <View style={s.mediaMetaRow}>
+              <Ionicons name="checkmark-circle" size={16} color={ORANGE} />
+              <Text style={s.mediaMetaText}>Video: {media.video.name}</Text>
+            </View>
+          )}
         </View>
 
         {/* Priority */}
@@ -294,6 +344,8 @@ const s = StyleSheet.create({
   metaRow: { flexDirection: "row", alignItems: "center", marginTop: 12 },
   metaLabel: { color: "#777", fontSize: 12, marginRight: 8, fontWeight: "700" },
   metaValue: { color: "#111", fontSize: 12, fontWeight: "900" },
+  mediaMetaRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 8 },
+  mediaMetaText: { color: "#777", fontSize: 12, fontWeight: "800", flex: 1 },
 
   inputWrap: {
     marginTop: 10,

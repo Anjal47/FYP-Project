@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { postJSON } from "../utils/api";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const PRIMARY_ORANGE = "#F57C00";
 const BG_COLOR = "#F5F5F5";
@@ -25,6 +27,11 @@ function routeByRole(role) {
 
 export default function RegisterScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -165,7 +172,7 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: BG_COLOR,
@@ -219,4 +226,4 @@ const styles = StyleSheet.create({
     color: PRIMARY_ORANGE,
     fontWeight: "600",
   },
-});
+};

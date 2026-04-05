@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000"; // Android emulator
@@ -245,9 +248,6 @@ export default function BookCounselorScreen({ navigation, route }) {
         slot: String(selectedSlot).trim(),
         notes: "",
       };
-
-      console.log("COUNSEL BOOKING PAYLOAD =>", payload);
-
       const data = await apiBookCounseling(token, payload);
 
       Alert.alert(
@@ -490,7 +490,7 @@ export default function BookCounselorScreen({ navigation, route }) {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
     </SafeAreaView>
   );
 }

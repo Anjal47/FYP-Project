@@ -1,5 +1,5 @@
 // src/screens/SupportScreen.jsx
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -11,6 +11,9 @@ import {
   Alert,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
+import { useAppTheme } from "../context/ThemeContext";
+import { createThemedStyles } from "../utils/themeStyles";
 
 const ORANGE = "#FF7A1A";
 
@@ -57,6 +60,11 @@ const mentalHealthAndSafety = [
 ];
 
 const SupportScreen = ({ navigation }) => {
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
   const handleBack = () => navigation?.goBack?.();
 
   const callNumber = (num) => {
@@ -73,7 +81,7 @@ const SupportScreen = ({ navigation }) => {
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backRow} onPress={handleBack}>
-          <Icon name="arrow-left" size={20} color="#111" />
+          <Icon name="arrow-left" size={20} color={theme.text} />
           <Text style={styles.headerTitle}>
             <Text style={styles.headerHighlight}> Support</Text>
             <Text style={styles.headerDot}>.</Text>
@@ -163,7 +171,7 @@ const SupportScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM BAR (same style as other screens) */}
 
@@ -173,7 +181,7 @@ const SupportScreen = ({ navigation }) => {
 
 export default SupportScreen;
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F4F4F4",
@@ -345,4 +353,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-});
+};

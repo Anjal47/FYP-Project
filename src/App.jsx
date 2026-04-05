@@ -1,18 +1,31 @@
 import React from "react";
-import { StatusBar, useColorScheme } from "react-native";
+import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AuthStack from "./navigation/AuthStack";
+import { ThemeProvider, useAppTheme } from "./context/ThemeContext";
 
-export default function App() {
-  const isDarkMode = useColorScheme() === "dark";
+function AppShell() {
+  const { ready, theme } = useAppTheme();
+
+  if (!ready) return null;
 
   return (
-    <SafeAreaProvider>
+    <>
       <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
-        backgroundColor="#F5F5F5"
+        barStyle={theme.statusBarStyle}
+        backgroundColor={theme.statusBar}
       />
       <AuthStack />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

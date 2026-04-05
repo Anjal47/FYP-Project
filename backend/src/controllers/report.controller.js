@@ -15,6 +15,11 @@ function timeAgo(date) {
   return `${d} days ago`;
 }
 
+function buildMediaUrl(req, file) {
+  if (!file) return "";
+  return `${req.protocol}://${req.get("host")}/uploads/reports/${file.filename}`;
+}
+
 /**
  * Decide department from report type
  * - civic / infrastructure issues → municipality
@@ -48,7 +53,21 @@ exports.createReport = async (req, res) => {
       return res.status(401).json({ ok: false, message: "Unauthorized" });
     }
 
-    const { type, area, description, priority } = req.body || {};
+    let { type, area, description, priority } = req.body || {};
+
+    // React Native multipart requests can occasionally drop plain text fields.
+    // Fall back to a serialized payload field when present.
+    if ((!type || !area) && req.body?.payload) {
+      try {
+        const parsed = JSON.parse(String(req.body.payload));
+        type = type || parsed?.type;
+        area = area || parsed?.area;
+        description = description || parsed?.description;
+        priority = priority || parsed?.priority;
+      } catch {
+        // Ignore parse failures and continue with normal validation below.
+      }
+    }
 
     if (!type || !area) {
       return res
@@ -63,6 +82,10 @@ exports.createReport = async (req, res) => {
     const reportCode = await generateReportCode();
     const department = inferDepartmentFromType(type);
 
+    const photoFile = req.files?.photo?.[0];
+    const videoFile = req.files?.video?.[0];
+    const audioFile = req.files?.audio?.[0];
+
     const report = await Report.create({
       createdBy: req.user._id,
       reportCode,
@@ -70,6 +93,9 @@ exports.createReport = async (req, res) => {
       type: String(type).trim(),
       area: String(area).trim(),
       description: description ? String(description).trim() : "",
+      photoUrl: buildMediaUrl(req, photoFile),
+      videoUrl: buildMediaUrl(req, videoFile),
+      audioUrl: buildMediaUrl(req, audioFile),
       priority: safePriority,
       status: "Open",
       assignedTo: null,
@@ -86,6 +112,9 @@ exports.createReport = async (req, res) => {
         type: report.type,
         area: report.area,
         description: report.description,
+        photoUrl: report.photoUrl || "",
+        videoUrl: report.videoUrl || "",
+        audioUrl: report.audioUrl || "",
         priority: report.priority,
         status: report.status,
         createdAt: report.createdAt,
@@ -116,6 +145,9 @@ exports.getMyReports = async (req, res) => {
       type: r.type,
       area: r.area,
       description: r.description,
+      photoUrl: r.photoUrl || "",
+      videoUrl: r.videoUrl || "",
+      audioUrl: r.audioUrl || "",
       priority: r.priority,
       status: r.status,
       createdAt: r.createdAt,
@@ -177,6 +209,9 @@ exports.getReportStatusByCode = async (req, res) => {
         type: report.type,
         area: report.area,
         description: report.description || "",
+        photoUrl: report.photoUrl || "",
+        videoUrl: report.videoUrl || "",
+        audioUrl: report.audioUrl || "",
         priority: report.priority,
         status: report.status,
         assignedTo: report.assignedTo

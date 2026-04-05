@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -9,30 +9,29 @@ import {
   Alert,
   Image,
 } from "react-native";
-
-// CHANGE THIS PATH ONLY IF YOUR qr.png IS IN A DIFFERENT FOLDER
-// If your qr.png is in src/assets/qr.png, use: ../../assets/qr.png
-// If your qr.png is in src/screens/assets/qr.png, use: ../assets/qr.png
-const qrImage = require("../assets/qr.png");
+import { useAppTheme } from "../../context/ThemeContext";
+import { createThemedStyles } from "../../utils/themeStyles";
 
 export default function DonateNowScreen({ route, navigation }) {
-  const donation = route?.params?.donation || {
-    title: "Help for Surgery",
-    location: "Kathmandu, Nepal",
-    needed: 50000,
-    raised: 20000,
-    urgency: "Urgent",
-    description: "Need support for an emergency surgery treatment.",
-    contactNumber: "+9779800000000",
-    physicalHelpNote:
-      "You can contact directly to provide medicine, transport, food, or in-person support.",
-    qrNote: "Scan this QR to donate instantly.",
-  };
-
-  const progress = Math.min((donation.raised / donation.needed) * 100, 100);
+  const { theme, isDark } = useAppTheme();
+  const styles = useMemo(
+    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
+    [theme, isDark]
+  );
+  const donation = route?.params?.donation || {};
+  const title = donation.helpType || "Donation Request";
+  const amountNeeded = Number(donation.amountNeeded || 0);
+  const raisedAmount = Number(donation.raisedAmount || 0);
+  const progress = amountNeeded > 0 ? Math.min((raisedAmount / amountNeeded) * 100, 100) : 0;
+  const contactNumber = donation.contact || "Not provided";
+  const physicalHelpNote =
+    donation.description || "Contact the requester directly if you want to provide in-person help.";
+  const qrNote = donation.qrImage
+    ? "Scan the requester QR code to donate instantly."
+    : "This request does not have a QR image yet. Please contact the requester directly.";
 
   const handleCall = () => {
-    Alert.alert("Contact", `Call: ${donation.contactNumber}`);
+    Alert.alert("Contact", `Call: ${contactNumber}`);
   };
 
   const handleShare = () => {
@@ -72,7 +71,7 @@ export default function DonateNowScreen({ route, navigation }) {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Donate Now</Text>
+          <Text style={styles.headerTitle}>Donate Now</Text>
 
         <View style={{ width: 40 }} />
       </View>
@@ -82,13 +81,13 @@ export default function DonateNowScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topCard}>
-          <Text style={styles.title}>{donation.title}</Text>
-          <Text style={styles.location}>{donation.location}</Text>
-          <Text style={styles.description}>{donation.description}</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.location}>{donation.location || "Location not provided"}</Text>
+          <Text style={styles.description}>{donation.description || "No description available."}</Text>
 
           <View style={styles.amountRow}>
-            <Text style={styles.amountText}>Need: Rs. {donation.needed}</Text>
-            <Text style={styles.amountText}>Raised: Rs. {donation.raised}</Text>
+            <Text style={styles.amountText}>Need: Rs. {amountNeeded}</Text>
+            <Text style={styles.amountText}>Raised: Rs. {raisedAmount}</Text>
           </View>
 
           <View style={styles.progressBarBg}>
@@ -102,22 +101,29 @@ export default function DonateNowScreen({ route, navigation }) {
             ]}
           >
             <Text style={[styles.urgencyText, { color: urgencyStyle.color }]}>
-              {donation.urgency}
+              {donation.urgency || "Medium"}
             </Text>
           </View>
         </View>
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Donate by QR</Text>
-          <Text style={styles.sectionSubtitle}>{donation.qrNote}</Text>
+          <Text style={styles.sectionSubtitle}>{qrNote}</Text>
 
           <View style={styles.qrBox}>
-            <Image source={qrImage} style={styles.qrImage} resizeMode="contain" />
+            {donation.qrImage ? (
+              <Image source={{ uri: donation.qrImage }} style={styles.qrImage} resizeMode="contain" />
+            ) : (
+              <Text style={styles.helperText}>No QR image uploaded for this request.</Text>
+            )}
           </View>
 
-          <Text style={styles.helperText}>
-            Scan this QR to donate quickly and easily.
-          </Text>
+          {!!donation.proofImage && (
+            <>
+              <Text style={styles.sectionTitle}>Proof Image</Text>
+              <Image source={{ uri: donation.proofImage }} style={styles.proofImage} resizeMode="cover" />
+            </>
+          )}
         </View>
 
         <View style={styles.sectionCard}>
@@ -125,12 +131,12 @@ export default function DonateNowScreen({ route, navigation }) {
 
           <View style={styles.contactBox}>
             <Text style={styles.contactLabel}>Phone Number</Text>
-            <Text style={styles.contactValue}>{donation.contactNumber}</Text>
+            <Text style={styles.contactValue}>{contactNumber}</Text>
           </View>
 
           <View style={styles.helpBox}>
             <Text style={styles.contactLabel}>How you can help physically</Text>
-            <Text style={styles.helpText}>{donation.physicalHelpNote}</Text>
+            <Text style={styles.helpText}>{physicalHelpNote}</Text>
           </View>
 
           <TouchableOpacity
@@ -163,7 +169,7 @@ export default function DonateNowScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const baseStyles = {
   container: {
     flex: 1,
     backgroundColor: "#F5F7FB",
@@ -319,6 +325,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#6B7280",
     lineHeight: 19,
+    textAlign: "center",
+  },
+  proofImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 14,
+    marginTop: 12,
   },
 
   contactBox: {
@@ -379,4 +392,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-});
+};

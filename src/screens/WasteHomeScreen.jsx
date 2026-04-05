@@ -2,6 +2,7 @@
 import React from "react";
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
+import FloatingHelpChat from "../components/FloatingHelpChat";
 
 const ORANGE = "#FF7A1A";
 
@@ -57,7 +58,7 @@ const WasteHomeScreen = ({ navigation }) => {
       </View>
 
       {/* ORANGE SIDE PILL */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* BOTTOM TABS */}
    

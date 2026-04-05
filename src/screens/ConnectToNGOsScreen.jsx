@@ -28,9 +28,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
       {
         id: "ngo-1",
         name: "SafeSpace Nepal",
-        phoneDisplay: "+977-1-4000000",
-        phoneDial: "+97714000000",
-        email: "support@safespace.org.np",
+        phoneDisplay: "+977-9800000001",
+        phoneDial: "+9779800000001",
+        email: "safespace.demo@example.com",
         description:
           "Crisis support, referrals, and safe guidance. Works with local services for urgent and non-urgent cases.",
         category: "Crisis & Referral",
@@ -38,9 +38,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
       {
         id: "ngo-2",
         name: "HopeLine Nepal",
-        phoneDisplay: "+977-9800000000",
-        phoneDial: "+9779800000000",
-        email: "helpline@hopeline.org.np",
+        phoneDisplay: "+977-9800000002",
+        phoneDial: "+9779800000002",
+        email: "hopeline.demo@example.com",
         description:
           "Confidential emotional support and mental health referrals. Helps you connect with counselors and community resources.",
         category: "Mental Health",
@@ -48,9 +48,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
       {
         id: "ngo-3",
         name: "WomenCare Network",
-        phoneDisplay: "+977-1-4100000",
-        phoneDial: "+97714100000",
-        email: "contact@womencare.org.np",
+        phoneDisplay: "+977-9800000003",
+        phoneDial: "+9779800000003",
+        email: "womencare.demo@example.com",
         description:
           "Support for women facing violence, harassment, or unsafe situations. Guidance, shelter referrals, and legal direction.",
         category: "Women Safety",
@@ -58,9 +58,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
       {
         id: "ngo-4",
         name: "ChildShield Nepal",
-        phoneDisplay: "+977-1-4200000",
-        phoneDial: "+97714200000",
-        email: "help@childshield.org.np",
+        phoneDisplay: "+977-9800000004",
+        phoneDial: "+9779800000004",
+        email: "childshield.demo@example.com",
         description:
           "Child protection support and referrals. Helps report incidents and connect to safe services for children at risk.",
         category: "Child Protection",
@@ -68,9 +68,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
       {
         id: "ngo-5",
         name: "AccessAble Nepal",
-        phoneDisplay: "+977-9801111111",
-        phoneDial: "+9779801111111",
-        email: "info@accessable.org.np",
+        phoneDisplay: "+977-9800000005",
+        phoneDial: "+9779800000005",
+        email: "accessable.demo@example.com",
         description:
           "Support and referrals for people with disabilities. Works on accessibility, inclusion, and wellbeing resources.",
         category: "Disability Support",
@@ -83,13 +83,7 @@ const ConnectToNGOsScreen = ({ navigation }) => {
   const handleCall = async (phoneDial) => {
     try {
       if (!phoneDial) return;
-      const url = `tel:${phoneDial}`;
-      const can = await Linking.canOpenURL(url);
-      if (!can) {
-        Alert.alert("Call not supported", "Your device cannot place calls from this app.");
-        return;
-      }
-      await Linking.openURL(url);
+      await Linking.openURL(`tel:${phoneDial}`);
     } catch (e) {
       Alert.alert("Error", "Could not open dialer.");
     }
@@ -99,13 +93,9 @@ const ConnectToNGOsScreen = ({ navigation }) => {
   const handleEmail = async (email) => {
     try {
       if (!email) return;
-      const url = `mailto:${email}`;
-      const can = await Linking.canOpenURL(url);
-      if (!can) {
-        Alert.alert("Email not supported", "No email app found on this device.");
-        return;
-      }
-      await Linking.openURL(url);
+      await Linking.openURL(
+        `mailto:${email}?subject=${encodeURIComponent("AngelTouch NGO Support")}`
+      );
     } catch (e) {
       Alert.alert("Error", "Could not open email app.");
     }

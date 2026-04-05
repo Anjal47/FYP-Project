@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import FloatingHelpChat from "../components/FloatingHelpChat";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
@@ -434,7 +435,7 @@ export default function WasteReportStatusScreen({ navigation, route }) {
       </ScrollView>
 
       {/* ✅ UI tweak: keep your orange side pill */}
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
       {/* ✅ UI add: bottom navigation (you already had styles; now it actually renders) */}
       <View style={styles.bottomBar}>

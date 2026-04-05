@@ -305,9 +305,6 @@ export default function CounsellorClientsScreen({ navigation }) {
         )}
       </View>
 
-      {/* Side orange pill */}
-      <View style={s.sidePill} />
-
       {/* Bottom nav */}
       <View style={s.bottomWrap}>
         <View style={s.bottomPill}>

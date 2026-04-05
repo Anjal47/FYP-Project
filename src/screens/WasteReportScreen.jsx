@@ -12,30 +12,39 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
+import FloatingHelpChat from "../components/FloatingHelpChat";
 
 const ORANGE = "#FF7A1A";
-const BASE_URL = "http://10.0.2.2:5000";
-
-async function apiCreateReport(token, payload) {
-  const res = await fetch(`${BASE_URL}/api/reports`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload || {}),
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.message || "Failed to submit report");
-  return data;
-}
 
 export default function WasteReportScreen({ navigation }) {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [media, setMedia] = useState({ photo: null, video: null });
   const [submitting, setSubmitting] = useState(false);
 
   const getToken = async () => AsyncStorage.getItem("token");
   const handleBack = () => navigation?.goBack?.();
-  const handleHomePress = () => navigation.navigate("Home");
+
+  const pickPhoto = async () => {
+    try {
+      const file = await pickReportPhoto();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, photo: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick image");
+    }
+  };
+
+  const pickVideo = async () => {
+    try {
+      const file = await pickReportVideo();
+      if (!file) return;
+      setMedia((prev) => ({ ...prev, video: file }));
+    } catch (e) {
+      Alert.alert("Picker Error", e?.message || "Could not pick video");
+    }
+  };
 
   const pickReportCode = (resp) =>
     resp?.reportCode ||
@@ -73,7 +82,7 @@ export default function WasteReportScreen({ navigation }) {
         priority: "Medium",
       };
 
-      const resp = await apiCreateReport(token, payload);
+      const resp = await createReportRequest(token, payload, media);
       const reportCode = pickReportCode(resp) || "N/A";
 
       Alert.alert(
@@ -84,6 +93,7 @@ export default function WasteReportScreen({ navigation }) {
             text: "Check Status",
             onPress: () => {
               resetForm();
+              setMedia({ photo: null, video: null });
               navigation.navigate("WasteReportStatus", { reportCode });
             },
           },
@@ -92,6 +102,7 @@ export default function WasteReportScreen({ navigation }) {
             style: "cancel",
             onPress: () => {
               resetForm();
+              setMedia({ photo: null, video: null });
               handleBack();
             },
           },
@@ -139,9 +150,26 @@ export default function WasteReportScreen({ navigation }) {
         />
 
         <View style={styles.mediaRow}>
-          <MediaButton label="Image" onPress={() => Alert.alert("Later", "Image upload next step")} />
-          <MediaButton label="Audio" onPress={() => Alert.alert("Later", "Audio upload next step")} />
-          <MediaButton label="Video" onPress={() => Alert.alert("Later", "Video upload next step")} />
+          <MediaButton label={media.photo ? "Change Image" : "Image"} onPress={pickPhoto} />
+          <MediaButton
+            label="Audio"
+            onPress={() =>
+              Alert.alert(
+                "Audio picker not ready",
+                "Audio upload is supported on the backend, but this app needs a document picker library to choose audio files."
+              )
+            }
+          />
+          <MediaButton label={media.video ? "Change Video" : "Video"} onPress={pickVideo} />
+        </View>
+
+        <View style={styles.mediaInfoBox}>
+          <Text style={styles.mediaInfoTitle}>Optional evidence</Text>
+          <Text style={styles.mediaInfoText}>
+            You can still submit with just the location and description. Media only adds more context.
+          </Text>
+          {!!media.photo?.name && <Text style={styles.mediaPickedText}>Photo: {media.photo.name}</Text>}
+          {!!media.video?.name && <Text style={styles.mediaPickedText}>Video: {media.video.name}</Text>}
         </View>
 
         <TouchableOpacity
@@ -165,7 +193,7 @@ export default function WasteReportScreen({ navigation }) {
         </Text>
       </View>
 
-      <View style={styles.sidePill} />
+      <FloatingHelpChat bottom={110} fabBottom={145} />
 
 
     </SafeAreaView>
@@ -248,6 +276,20 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   mediaLabel: { fontSize: 13, fontWeight: "600", color: "#111" },
+  mediaInfoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 18,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  mediaInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
+  mediaInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
+  mediaPickedText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: ORANGE },
 
   submitBtn: {
     marginTop: 6,

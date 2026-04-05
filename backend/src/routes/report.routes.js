@@ -1,10 +1,11 @@
 // src/routes/report.routes.js
 const router = require("express").Router();
 const auth = require("../middleware/auth");
+const reportUpload = require("../middleware/reportUpload");
 const reportController = require("../controllers/report.controller");
 
 // Create a report (requires login)
-router.post("/", auth, reportController.createReport);
+router.post("/", auth, reportUpload, reportController.createReport);
 
 // Get my reports (requires login)
 router.get("/mine", auth, reportController.getMyReports);
