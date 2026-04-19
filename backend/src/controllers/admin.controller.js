@@ -258,6 +258,18 @@ exports.downloadReportPDF = async (req, res, next) => {
     line("Report ID", report.reportCode || report._id);
     line("Type", report.type);
     line("Area", report.area);
+    if (
+      Number.isFinite(report.geoLocation?.latitude) &&
+      Number.isFinite(report.geoLocation?.longitude)
+    ) {
+      line(
+        "Pinned Coordinates",
+        `${report.geoLocation.latitude}, ${report.geoLocation.longitude}`
+      );
+      if (Number.isFinite(report.geoLocation?.accuracy)) {
+        line("Location Accuracy", `${Math.round(report.geoLocation.accuracy)} m`);
+      }
+    }
     line("Priority", report.priority);
     line("Status", report.status);
     line(
@@ -284,4 +296,3 @@ exports.downloadReportPDF = async (req, res, next) => {
     next(err);
   }
 };
-

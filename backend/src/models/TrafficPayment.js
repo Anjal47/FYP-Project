@@ -13,6 +13,9 @@ const TrafficPaymentSchema = new mongoose.Schema(
     },
 
     transactionRef: { type: String, required: true },
+    gatewayRef: { type: String, default: "" },
+    gatewayStatus: { type: String, default: "" },
+    gatewayPayload: { type: String, default: "" },
 
     status: {
       type: String,

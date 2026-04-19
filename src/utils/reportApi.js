@@ -46,6 +46,19 @@ export async function createReportRequest(token, payload, media = {}) {
     area: String(payload?.area || "").trim(),
     description: String(payload?.description || "").trim(),
     priority: String(payload?.priority || "Medium").trim(),
+    geoLocation:
+      payload?.geoLocation &&
+      Number.isFinite(Number(payload.geoLocation.latitude)) &&
+      Number.isFinite(Number(payload.geoLocation.longitude))
+        ? {
+            latitude: Number(payload.geoLocation.latitude),
+            longitude: Number(payload.geoLocation.longitude),
+            accuracy: Number.isFinite(Number(payload.geoLocation.accuracy))
+              ? Number(payload.geoLocation.accuracy)
+              : null,
+            capturedAt: payload.geoLocation.capturedAt || new Date().toISOString(),
+          }
+        : null,
   };
 
   if (!cleanPayload.type || !cleanPayload.area) {
@@ -62,6 +75,9 @@ export async function createReportRequest(token, payload, media = {}) {
     body.append("area", cleanPayload.area);
     body.append("description", cleanPayload.description);
     body.append("priority", cleanPayload.priority);
+    if (cleanPayload.geoLocation) {
+      body.append("geoLocation", JSON.stringify(cleanPayload.geoLocation));
+    }
     body.append("payload", JSON.stringify(cleanPayload));
 
     if (media.photo) body.append("photo", media.photo);

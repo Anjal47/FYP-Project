@@ -69,6 +69,7 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
   useEffect(() => {
     const unsub = navigation.addListener("focus", load);
     return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation]);
 
   const onConfirm = (id) => {
@@ -106,6 +107,27 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
             await load();
           } catch (e) {
             Alert.alert("Decline failed", e?.message || "Could not decline");
+          } finally {
+            setActingId("");
+          }
+        },
+      },
+    ]);
+  };
+
+  const onComplete = (id) => {
+    Alert.alert("Complete", "Mark this appointment as completed?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Complete",
+        onPress: async () => {
+          try {
+            setActingId(id);
+            const token = await AsyncStorage.getItem("token");
+            await apiAction(token, id, "complete");
+            await load();
+          } catch (e) {
+            Alert.alert("Complete failed", e?.message || "Could not mark appointment complete");
           } finally {
             setActingId("");
           }
@@ -170,6 +192,7 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
         ) : (
           rows.map((x) => {
             const isPending = x.status === "pending";
+            const isConfirmed = x.status === "confirmed";
             const busy = actingId === x.id;
 
             return (
@@ -240,6 +263,20 @@ export default function CounsellorAppointmentsScreen({ navigation }) {
                       <Feather name="x" size={18} color="#EF4444" />
                     )}
                     <Text style={s.btnTxt}>Decline</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    disabled={!isConfirmed || busy}
+                    activeOpacity={0.9}
+                    style={[s.btn, s.completeBtn, { opacity: !isConfirmed || busy ? 0.55 : 1 }]}
+                    onPress={() => onComplete(x.id)}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Feather name="check-circle" size={18} color="#FFFFFF" />
+                    )}
+                    <Text style={s.btnTxtLight}>Complete</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -377,6 +414,7 @@ const s = StyleSheet.create({
     paddingVertical: 11,
   },
   confirmBtn: { backgroundColor: ORANGE },
+  completeBtn: { backgroundColor: "#22C55E" },
   declineBtn: { backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#F3D2D2" },
   btnTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
   btnTxtLight: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" },

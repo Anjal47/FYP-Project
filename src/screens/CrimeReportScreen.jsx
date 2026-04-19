@@ -17,6 +17,11 @@ import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/
 import FloatingHelpChat from "../components/FloatingHelpChat";
 import { useAppTheme } from "../context/ThemeContext";
 import { createThemedStyles } from "../utils/themeStyles";
+import {
+  formatPinnedLocation,
+  getCurrentPreciseLocation,
+  showLocationUnavailableAlert,
+} from "../utils/location";
 
 const ORANGE = "#FF7A1A";
 
@@ -28,6 +33,8 @@ export default function CrimeReportScreen({ navigation, route }) {
   const [description, setDescription] = useState("");
   const [area, setArea] = useState("");
   const [media, setMedia] = useState({ photo: null, video: null });
+  const [geoLocation, setGeoLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const styles = useMemo(
     () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
@@ -62,6 +69,21 @@ export default function CrimeReportScreen({ navigation, route }) {
     }
   };
 
+  const onUseCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const current = await getCurrentPreciseLocation();
+      setGeoLocation(current);
+      setArea((prev) =>
+        String(prev || "").trim() ? prev : `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`
+      );
+    } catch (e) {
+      showLocationUnavailableAlert(e);
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const onSubmit = async () => {
     try {
       const d = description.trim();
@@ -82,6 +104,7 @@ export default function CrimeReportScreen({ navigation, route }) {
         area: a,            // ✅ required
         description: d,
         priority: "Medium",
+        geoLocation,
       };
 
       const data = await createReportRequest(token, payload, media);
@@ -112,6 +135,7 @@ export default function CrimeReportScreen({ navigation, route }) {
             onPress: () => {
               setDescription("");
               setArea("");
+              setGeoLocation(null);
               setMedia({ photo: null, video: null });
               navigation.goBack();
             },
@@ -167,6 +191,27 @@ export default function CrimeReportScreen({ navigation, route }) {
           value={area}
           onChangeText={setArea}
         />
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={onUseCurrentLocation}
+          disabled={locating || submitting}
+          style={[styles.locationPinBtn, (locating || submitting) && { opacity: 0.7 }]}
+        >
+          {locating ? (
+            <View style={styles.locationPinRow}>
+              <ActivityIndicator size="small" color={ORANGE} />
+              <Text style={styles.locationPinText}>Pinning current location...</Text>
+            </View>
+          ) : (
+            <Text style={styles.locationPinText}>Use Current Location</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.pinInfoBox}>
+          <Text style={styles.pinInfoTitle}>Pinned point</Text>
+          <Text style={styles.pinInfoValue}>{formatPinnedLocation(geoLocation)}</Text>
+        </View>
 
         {/* MEDIA ROW */}
         <View style={styles.mediaRow}>
@@ -288,6 +333,32 @@ const baseStyles = {
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  locationPinBtn: {
+    marginTop: -8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: ORANGE,
+    borderRadius: 16,
+    backgroundColor: "#FFF7F0",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationPinRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  locationPinText: { color: ORANGE, fontSize: 13, fontWeight: "800" },
+  pinInfoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  pinInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
+  pinInfoValue: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
 
   mediaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 24 },
   mediaCard: {

@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getMyCounselingReviews, formatReviewSummary } from "../utils/counselingReviews";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000"; // Android emulator
@@ -87,6 +88,8 @@ export default function ProfileScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const [me, setMe] = useState(null);
+  const [reviewsSummary, setReviewsSummary] = useState({ averageRating: 0, reviewCount: 0 });
+  const [receivedReviews, setReceivedReviews] = useState([]);
 
   // Profile form
   const [form, setForm] = useState({
@@ -138,6 +141,10 @@ export default function ProfileScreen({ navigation }) {
       const data = await apiGetMe(token);
       setMe(data?.user || null);
       fillFormFromMe(data?.user);
+
+      const reviewsData = await getMyCounselingReviews(token).catch(() => null);
+      setReviewsSummary(reviewsData?.summary || { averageRating: 0, reviewCount: 0 });
+      setReceivedReviews(Array.isArray(reviewsData?.reviews) ? reviewsData.reviews : []);
     } catch (err) {
       Alert.alert("Profile error", err?.message || "Unable to load profile");
     } finally {
@@ -336,6 +343,31 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Edit profile */}
         <View style={[s.card, { borderColor: UI.line }]}>
+          <Text style={[s.sectionTitle, { color: UI.text }]}>Ratings & Reviews</Text>
+          <Text style={s.bigName}>{formatReviewSummary(reviewsSummary)}</Text>
+          <Text style={s.small}>
+            {receivedReviews.length
+              ? "Recent feedback from your counseling sessions"
+              : "No counseling reviews have been received yet."}
+          </Text>
+
+          {receivedReviews.slice(0, 4).map((review) => (
+            <View key={String(review.id)} style={s.reviewCard}>
+              <Text style={s.reviewStars}>
+                {"★".repeat(review.rating)}
+                {"☆".repeat(5 - review.rating)}
+              </Text>
+              <Text style={s.reviewMeta}>
+                {review?.reviewer?.fullName || "Anonymous"} {review?.reviewer?.role ? `• ${review.reviewer.role}` : ""}
+              </Text>
+              <Text style={s.reviewBody}>
+                {review.comment || "No written comment was added for this rating."}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={[s.card, { borderColor: UI.line }]}>
           <Text style={[s.sectionTitle, { color: UI.text }]}>Edit Details</Text>
 
           <Field label="Full Name" value={form.fullName} onChangeText={(v) => onChange("fullName", v)} />
@@ -487,6 +519,15 @@ subTitleSmall: {
 
   bigName: { fontSize: 18, fontWeight: "900" },
   small: { marginTop: 4, fontSize: 12, fontWeight: "800" },
+  reviewCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    backgroundColor: "#FFF7F0",
+    padding: 12,
+  },
+  reviewStars: { fontSize: 17, color: ORANGE, fontWeight: "900" },
+  reviewMeta: { marginTop: 6, fontSize: 12, color: "#555", fontWeight: "800" },
+  reviewBody: { marginTop: 6, fontSize: 12, lineHeight: 18, color: "#333", fontWeight: "700" },
 
   sectionTitle: { fontSize: 14, fontWeight: "900", marginBottom: 10 },
   label: { fontSize: 12, fontWeight: "800", color: "#555", marginBottom: 6 },

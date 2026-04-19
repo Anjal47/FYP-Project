@@ -16,6 +16,12 @@ const ReportSchema = new mongoose.Schema(
 
     type: { type: String, required: true, trim: true },
     area: { type: String, required: true, trim: true },
+    geoLocation: {
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      capturedAt: { type: Date, default: null },
+    },
     description: { type: String, default: "", trim: true },
     photoUrl: { type: String, default: "" },
     videoUrl: { type: String, default: "" },

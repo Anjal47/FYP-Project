@@ -72,10 +72,16 @@ exports.listMunicipalityReports = async (req, res, next) => {
       });
     }
 
-    const reports = await Report.find(filter)
+    const rows = await Report.find(filter)
       .populate("createdBy", "fullName email role")
       .populate("assignedTo", "fullName email role")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const reports = rows.map((r) => ({
+      ...r,
+      geoLocation: r.geoLocation || null,
+    }));
 
     return res.json({ ok: true, reports });
   } catch (e) {

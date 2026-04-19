@@ -13,6 +13,8 @@ import call from "react-native-phone-call";
 import FloatingHelpChat from "../components/FloatingHelpChat";
 import { useAppTheme } from "../context/ThemeContext";
 import { createThemedStyles } from "../utils/themeStyles";
+import { createReportRequest } from "../utils/reportApi";
+import { getCurrentPreciseLocation } from "../utils/location";
 
 const ORANGE = "#FF7A1A";
 const STORAGE_KEY = "emergency_contact_number";
@@ -24,6 +26,19 @@ const sanitizePhone = (raw) => {
   const digitsOnly = trimmed.replace(/[^\d]/g, "");
   return plus + digitsOnly;
 };
+
+const pickReportCode = (resp) =>
+  resp?.reportCode ||
+  resp?.code ||
+  resp?.data?.reportCode ||
+  resp?.data?.code ||
+  resp?.report?.reportCode ||
+  resp?.report?.code ||
+  resp?.report?.id ||
+  resp?.report?._id ||
+  resp?.id ||
+  resp?._id ||
+  null;
 
 export default function EmergencySOSScreen({ navigation }) {
   const { theme, isDark } = useAppTheme();
@@ -58,6 +73,8 @@ export default function EmergencySOSScreen({ navigation }) {
     };
   }, [navigation]);
 
+  const getToken = async () => AsyncStorage.getItem("token");
+
   const placeCall = async (number) => {
     try {
       await call({
@@ -67,6 +84,61 @@ export default function EmergencySOSScreen({ navigation }) {
       });
     } catch (error) {
       Alert.alert("Call Failed", "Unable to place the call right now.");
+    }
+  };
+
+  const sendPoliceSosReport = async () => {
+    const token = await getToken();
+    if (!token) {
+      throw new Error("Token not found. Please login again.");
+    }
+
+    let geoLocation = null;
+    try {
+      geoLocation = await getCurrentPreciseLocation();
+    } catch (error) {
+      geoLocation = null;
+    }
+
+    const area = geoLocation
+      ? `${geoLocation.latitude.toFixed(6)}, ${geoLocation.longitude.toFixed(6)}`
+      : "Live location unavailable";
+
+    const description = geoLocation
+      ? `Emergency SOS triggered from the app. Immediate police attention needed at coordinates ${geoLocation.latitude.toFixed(6)}, ${geoLocation.longitude.toFixed(6)}.`
+      : "Emergency SOS triggered from the app. Immediate police attention needed, but live coordinates could not be captured.";
+
+    const payload = {
+      type: "Police SOS",
+      area,
+      description,
+      priority: "High",
+      geoLocation,
+    };
+
+    return createReportRequest(token, payload);
+  };
+
+  const handlePoliceSos = async () => {
+    let reportCode = null;
+
+    try {
+      const resp = await sendPoliceSosReport();
+      reportCode = pickReportCode(resp);
+    } catch (error) {
+      Alert.alert(
+        "SOS Warning",
+        error?.message || "Could not send the police dashboard warning. The call will still continue."
+      );
+    }
+
+    await placeCall("100");
+
+    if (reportCode) {
+      Alert.alert(
+        "Police Alert Sent",
+        `A high-priority SOS report was also sent to the police dashboard.\n\nReport Code: ${reportCode}`
+      );
     }
   };
 
@@ -130,7 +202,7 @@ export default function EmergencySOSScreen({ navigation }) {
           icon="shield"
           title="Police"
           subtitle="Call police helpline 100"
-          onPress={() => placeCall("100")}
+          onPress={handlePoliceSos}
         />
 
         <SOSOptionCard

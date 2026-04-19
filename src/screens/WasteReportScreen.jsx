@@ -14,6 +14,11 @@ import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
 import FloatingHelpChat from "../components/FloatingHelpChat";
+import {
+  formatPinnedLocation,
+  getCurrentPreciseLocation,
+  showLocationUnavailableAlert,
+} from "../utils/location";
 
 const ORANGE = "#FF7A1A";
 
@@ -21,6 +26,8 @@ export default function WasteReportScreen({ navigation }) {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [media, setMedia] = useState({ photo: null, video: null });
+  const [geoLocation, setGeoLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const getToken = async () => AsyncStorage.getItem("token");
@@ -58,6 +65,22 @@ export default function WasteReportScreen({ navigation }) {
   const resetForm = () => {
     setDescription("");
     setLocation("");
+    setGeoLocation(null);
+  };
+
+  const onUseCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const current = await getCurrentPreciseLocation();
+      setGeoLocation(current);
+      setLocation((prev) =>
+        String(prev || "").trim() ? prev : `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`
+      );
+    } catch (e) {
+      showLocationUnavailableAlert(e);
+    } finally {
+      setLocating(false);
+    }
   };
 
   const onSubmit = async () => {
@@ -80,6 +103,7 @@ export default function WasteReportScreen({ navigation }) {
         area: l,
         description: d,
         priority: "Medium",
+        geoLocation,
       };
 
       const resp = await createReportRequest(token, payload, media);
@@ -148,6 +172,27 @@ export default function WasteReportScreen({ navigation }) {
           value={location}
           onChangeText={setLocation}
         />
+
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={onUseCurrentLocation}
+          disabled={locating || submitting}
+          style={[styles.locationPinBtn, (locating || submitting) && { opacity: 0.7 }]}
+        >
+          {locating ? (
+            <View style={styles.inlineRow}>
+              <ActivityIndicator size="small" color={ORANGE} />
+              <Text style={styles.locationPinBtnTxt}>Pinning current location...</Text>
+            </View>
+          ) : (
+            <Text style={styles.locationPinBtnTxt}>Use Current Location</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.pinInfoBox}>
+          <Text style={styles.pinInfoTitle}>Pinned point</Text>
+          <Text style={styles.pinInfoText}>{formatPinnedLocation(geoLocation)}</Text>
+        </View>
 
         <View style={styles.mediaRow}>
           <MediaButton label={media.photo ? "Change Image" : "Image"} onPress={pickPhoto} />
@@ -262,6 +307,32 @@ const styles = StyleSheet.create({
   },
 
   mediaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
+  inlineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  locationPinBtn: {
+    marginTop: -12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: ORANGE,
+    borderRadius: 16,
+    backgroundColor: "#FFF7F0",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationPinBtnTxt: { color: ORANGE, fontSize: 13, fontWeight: "800" },
+  pinInfoBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  pinInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
+  pinInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
   mediaButton: {
     width: "30%",
     backgroundColor: "#FFFFFF",

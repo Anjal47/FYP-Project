@@ -17,6 +17,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -114,6 +115,27 @@ export default function MunicipalityHomeScreen({ navigation }) {
   };
 
   const getToken = async () => AsyncStorage.getItem("token");
+
+  const openInMaps = async (geoLocation) => {
+    try {
+      if (
+        !Number.isFinite(geoLocation?.latitude) ||
+        !Number.isFinite(geoLocation?.longitude)
+      ) {
+        return Alert.alert("Location unavailable", "This complaint does not have pinned coordinates.");
+      }
+
+      const url = `https://www.google.com/maps/search/?api=1&query=${geoLocation.latitude},${geoLocation.longitude}`;
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        return Alert.alert("Maps unavailable", "No maps app or browser is available on this device.");
+      }
+
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert("Maps error", e?.message || "Could not open the pinned location.");
+    }
+  };
 
   const loadOfficer = async () => {
     try {
@@ -429,6 +451,22 @@ export default function MunicipalityHomeScreen({ navigation }) {
                   <Text style={[s.metaTxt, { color: UI.mut }]}>{r.time || "just now"}</Text>
                 </View>
 
+                {Number.isFinite(r?.geoLocation?.latitude) && Number.isFinite(r?.geoLocation?.longitude) ? (
+                  <View style={s.coordRow}>
+                    <Text style={[s.coordTxt, { color: UI.mut }]}>
+                      Pin: {r.geoLocation.latitude.toFixed(6)}, {r.geoLocation.longitude.toFixed(6)}
+                    </Text>
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      onPress={() => openInMaps(r.geoLocation)}
+                      style={[s.mapBtn, { borderColor: UI.line }]}
+                    >
+                      <Ionicons name="navigate-outline" size={14} color={UI.text} />
+                      <Text style={[s.mapBtnTxt, { color: UI.text }]}>Open in Maps</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
                 <View style={s.actionsRow}>
                   <View style={[s.statusPill, { borderColor: UI.line }]}>
                     <View style={[s.dot, { backgroundColor: stTone }]} />
@@ -551,6 +589,18 @@ const s = StyleSheet.create({
   metaRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   metaTxt: { fontSize: 12, fontWeight: "700" },
   metaDot: { marginHorizontal: 4, fontSize: 12, fontWeight: "900" },
+  coordRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  coordTxt: { fontSize: 12, fontWeight: "700" },
+  mapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  mapBtnTxt: { fontSize: 11, fontWeight: "900" },
 
   actionsRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   statusPill: {

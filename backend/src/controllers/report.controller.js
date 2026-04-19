@@ -20,6 +20,40 @@ function buildMediaUrl(req, file) {
   return `${req.protocol}://${req.get("host")}/uploads/reports/${file.filename}`;
 }
 
+function parseGeoLocation(input) {
+  if (!input) return null;
+
+  let source = input;
+  if (typeof input === "string") {
+    try {
+      source = JSON.parse(input);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!source || typeof source !== "object") return null;
+
+  const latitude = Number(source.latitude);
+  const longitude = Number(source.longitude);
+  const accuracy =
+    source.accuracy === undefined || source.accuracy === null || source.accuracy === ""
+      ? null
+      : Number(source.accuracy);
+  const capturedAt = source.capturedAt ? new Date(source.capturedAt) : null;
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+
+  return {
+    latitude,
+    longitude,
+    accuracy: Number.isFinite(accuracy) ? accuracy : null,
+    capturedAt:
+      capturedAt && !Number.isNaN(capturedAt.getTime()) ? capturedAt : new Date(),
+  };
+}
+
 /**
  * Decide department from report type
  * - civic / infrastructure issues → municipality
@@ -53,7 +87,7 @@ exports.createReport = async (req, res) => {
       return res.status(401).json({ ok: false, message: "Unauthorized" });
     }
 
-    let { type, area, description, priority } = req.body || {};
+    let { type, area, description, priority, geoLocation } = req.body || {};
 
     // React Native multipart requests can occasionally drop plain text fields.
     // Fall back to a serialized payload field when present.
@@ -64,6 +98,7 @@ exports.createReport = async (req, res) => {
         area = area || parsed?.area;
         description = description || parsed?.description;
         priority = priority || parsed?.priority;
+        geoLocation = geoLocation || parsed?.geoLocation;
       } catch {
         // Ignore parse failures and continue with normal validation below.
       }
@@ -81,6 +116,7 @@ exports.createReport = async (req, res) => {
 
     const reportCode = await generateReportCode();
     const department = inferDepartmentFromType(type);
+    const safeGeoLocation = parseGeoLocation(geoLocation);
 
     const photoFile = req.files?.photo?.[0];
     const videoFile = req.files?.video?.[0];
@@ -92,6 +128,7 @@ exports.createReport = async (req, res) => {
       department,
       type: String(type).trim(),
       area: String(area).trim(),
+      geoLocation: safeGeoLocation,
       description: description ? String(description).trim() : "",
       photoUrl: buildMediaUrl(req, photoFile),
       videoUrl: buildMediaUrl(req, videoFile),
@@ -111,6 +148,7 @@ exports.createReport = async (req, res) => {
         department: report.department,
         type: report.type,
         area: report.area,
+        geoLocation: report.geoLocation || null,
         description: report.description,
         photoUrl: report.photoUrl || "",
         videoUrl: report.videoUrl || "",
@@ -144,6 +182,7 @@ exports.getMyReports = async (req, res) => {
       department: r.department || "",
       type: r.type,
       area: r.area,
+      geoLocation: r.geoLocation || null,
       description: r.description,
       photoUrl: r.photoUrl || "",
       videoUrl: r.videoUrl || "",
@@ -208,6 +247,7 @@ exports.getReportStatusByCode = async (req, res) => {
         department: report.department,
         type: report.type,
         area: report.area,
+        geoLocation: report.geoLocation || null,
         description: report.description || "",
         photoUrl: report.photoUrl || "",
         videoUrl: report.videoUrl || "",

@@ -19,6 +19,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Linking,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -42,17 +43,43 @@ function timeAgo(dateLike) {
   return `${d}d ago`;
 }
 
+function extractCoordinates(report) {
+  if (
+    Number.isFinite(report?.geoLocation?.latitude) &&
+    Number.isFinite(report?.geoLocation?.longitude)
+  ) {
+    return {
+      latitude: report.geoLocation.latitude,
+      longitude: report.geoLocation.longitude,
+    };
+  }
+
+  const match = String(report?.area || "").match(
+    /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/
+  );
+  if (!match) return null;
+
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+
+  return { latitude, longitude };
+}
+
 export default function PoliceHomeScreen({ navigation }) {
   const UI = useMemo(
     () => ({
-      bg: "#0B0F14",
-      card: "#111826",
-      card2: "#0F172A",
-      text: "#EAF0FF",
-      mut: "rgba(234,240,255,0.68)",
-      line: "rgba(255,255,255,0.08)",
-      accent: "#22C55E",
-      accent2: "#7C3AED",
+      bg: "#F6F3EE",
+      card: "#FFFFFF",
+      card2: "#FFF7EF",
+      text: "#111111",
+      mut: "#6F6257",
+      softText: "#9B8A7B",
+      line: "#EADBCB",
+      accent: "#FF7A1A",
+      accent2: "#D97706",
+      accentSoft: "#FFE0C2",
       danger: "#EF4444",
       warn: "#F59E0B",
     }),
@@ -89,6 +116,60 @@ export default function PoliceHomeScreen({ navigation }) {
   };
 
   const getToken = async () => AsyncStorage.getItem("token");
+
+  const openInMaps = async (geoLocation) => {
+    try {
+      if (
+        !Number.isFinite(geoLocation?.latitude) ||
+        !Number.isFinite(geoLocation?.longitude)
+      ) {
+        return Alert.alert("Location unavailable", "This report does not have pinned coordinates.");
+      }
+
+      const url = `https://www.google.com/maps/search/?api=1&query=${geoLocation.latitude},${geoLocation.longitude}`;
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        return Alert.alert("Maps unavailable", "No maps app or browser is available on this device.");
+      }
+
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert("Maps error", e?.message || "Could not open the pinned location.");
+    }
+  };
+
+  const showReportDetails = (report) => {
+    const coords = extractCoordinates(report);
+    const details = [
+      `Report: ${report.id}`,
+      `Type: ${report.type}`,
+      `Priority: ${report.priority}`,
+      `Status: ${report.status}`,
+      `Area: ${report.area || "Unknown area"}`,
+      `Updated: ${report.time || "just now"}`,
+      report.description ? `Description: ${report.description}` : "Description: No description provided",
+    ];
+
+    if (coords) {
+      details.push(
+        `Pinned Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+      );
+    }
+
+    Alert.alert(
+      "Report Details",
+      details.join("\n\n"),
+      coords
+        ? [
+            { text: "Close", style: "cancel" },
+            {
+              text: "Open in Maps",
+              onPress: () => openInMaps(coords),
+            },
+          ]
+        : [{ text: "Close", style: "cancel" }]
+    );
+  };
 
   const apiGetReports = async ({ token, status, q }) => {
     const params = new URLSearchParams();
@@ -262,23 +343,52 @@ export default function PoliceHomeScreen({ navigation }) {
           />
         }
       >
-        <View style={s.header}>
-          <View>
-            <Text style={[s.title, { color: UI.text }]}>
-              Police <Text style={{ color: UI.accent, fontWeight: "900" }}>Desk</Text>
-            </Text>
-            <Text style={[s.sub, { color: UI.mut }]}>
-              Monitor, assign, and resolve incident reports.
-            </Text>
+        <View style={[s.hero, { borderColor: UI.line, backgroundColor: UI.card }]}>
+          <View style={[s.heroGlow, { backgroundColor: UI.card2 }]} />
+          <View style={s.header}>
+            <View style={s.headerCopy}>
+              <Text style={[s.title, { color: UI.text }]}>
+                Police <Text style={{ color: UI.accent, fontWeight: "900" }}>Desk</Text>
+              </Text>
+              <Text style={[s.sub, { color: UI.mut }]}>
+                Monitor reports, issue fines, and move cases forward faster.
+              </Text>
+            </View>
+
+            <View style={s.headerActions}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[s.quickBtn, { backgroundColor: UI.accent }]}
+                onPress={() => navigation.navigate("TrafficFineCreate")}
+              >
+                <Ionicons name="card-outline" size={16} color="#fff" />
+                <Text style={s.quickBtnTxt}>Issue Fine</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[s.roundBtn, { borderColor: UI.line }]}
+                onPress={() => navigation.navigate("Settings")}
+              >
+                <Ionicons name="settings-outline" size={22} color={UI.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={[s.roundBtn, { borderColor: UI.line }]}
-            onPress={() => navigation.navigate("Settings")}
-          >
-            <Ionicons name="settings-outline" size={22} color={UI.text} />
-          </TouchableOpacity>
+          <View style={s.heroBand}>
+            <View style={[s.heroChip, { borderColor: UI.line, backgroundColor: UI.card2 }]}>
+              <Ionicons name="flash-outline" size={14} color={UI.warn} />
+              <Text style={[s.heroChipTxt, { color: UI.text }]}>Rapid assignment</Text>
+            </View>
+            <View style={[s.heroChip, { borderColor: UI.line, backgroundColor: UI.card2 }]}>
+              <Ionicons name="navigate-outline" size={14} color={UI.accent} />
+              <Text style={[s.heroChipTxt, { color: UI.text }]}>Open map pins</Text>
+            </View>
+            <View style={[s.heroChip, { borderColor: UI.line, backgroundColor: UI.card2 }]}>
+              <Ionicons name="document-text-outline" size={14} color={UI.accent2} />
+              <Text style={[s.heroChipTxt, { color: UI.text }]}>Full report details</Text>
+            </View>
+          </View>
         </View>
 
         <View style={s.statsRow}>
@@ -293,7 +403,7 @@ export default function PoliceHomeScreen({ navigation }) {
             value={query}
             onChangeText={setQuery}
             placeholder="Search type, area, status, priority..."
-            placeholderTextColor="rgba(234,240,255,0.45)"
+            placeholderTextColor={UI.softText}
             style={[s.searchInput, { color: UI.text }]}
           />
           {!!query && (
@@ -309,17 +419,17 @@ export default function PoliceHomeScreen({ navigation }) {
               key={f}
               activeOpacity={0.9}
               onPress={() => setFilter(f)}
-              style={[
-                s.filterChip,
-                {
-                  borderColor: UI.line,
-                  backgroundColor: filter === f ? UI.card2 : UI.card,
-                },
-              ]}
-            >
+                style={[
+                  s.filterChip,
+                  {
+                    borderColor: UI.line,
+                    backgroundColor: filter === f ? UI.accentSoft : UI.card,
+                  },
+                ]}
+              >
               <Text
                 style={{
-                  color: filter === f ? UI.text : UI.mut,
+                  color: filter === f ? UI.accent2 : UI.mut,
                   fontWeight: "800",
                   fontSize: 12,
                 }}
@@ -349,15 +459,19 @@ export default function PoliceHomeScreen({ navigation }) {
             </View>
           ) : null}
 
-          {reports.map((r) => (
-            <View
+          {reports.map((r) => {
+            const coords = extractCoordinates(r);
+            return (
+            <TouchableOpacity
               key={r._id}
+              activeOpacity={0.92}
+              onPress={() => showReportDetails(r)}
               style={[s.reportCard, { borderColor: UI.line, backgroundColor: UI.card2 }]}
             >
               <View style={s.reportTop}>
                 <Text style={[s.reportId, { color: UI.text }]}>{r.id}</Text>
 
-                <View style={[s.badge, { borderColor: UI.line, backgroundColor: "rgba(0,0,0,0.15)" }]}>
+                <View style={[s.badge, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}>
                   <View style={[s.dot, { backgroundColor: badgeTone(r.priority) }]} />
                   <Text style={[s.badgeTxt, { color: UI.text }]}>{r.priority}</Text>
                 </View>
@@ -382,8 +496,44 @@ export default function PoliceHomeScreen({ navigation }) {
                 <Text style={[s.metaTxt, { color: UI.mut }]}>{r.time || "just now"}</Text>
               </View>
 
+              {coords ? (
+                <View style={s.coordRow}>
+                  <Text style={[s.coordTxt, { color: UI.mut }]}>
+                    Pin: {coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}
+                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => openInMaps(coords)}
+                    style={[s.mapBtn, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}
+                  >
+                    <Ionicons name="navigate-outline" size={14} color={UI.text} />
+                    <Text style={[s.mapBtnTxt, { color: UI.text }]}>Open in Maps</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
               <View style={s.actionsRow}>
-                <View style={[s.statusPill, { borderColor: UI.line }]}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => showReportDetails(r)}
+                  style={[s.actionBtn, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}
+                >
+                  <Ionicons name="document-text-outline" size={16} color={UI.text} />
+                  <Text style={[s.actionTxt, { color: UI.text }]}>Details</Text>
+                </TouchableOpacity>
+
+                {coords ? (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => openInMaps(coords)}
+                    style={[s.actionBtn, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}
+                  >
+                    <Ionicons name="navigate-outline" size={16} color={UI.text} />
+                    <Text style={[s.actionTxt, { color: UI.text }]}>Maps</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <View style={[s.statusPill, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}>
                   <View style={[s.dot, { backgroundColor: statusTone(r.status) }]} />
                   <Text style={[s.statusTxt, { color: UI.text }]}>{r.status}</Text>
                 </View>
@@ -392,7 +542,7 @@ export default function PoliceHomeScreen({ navigation }) {
                   <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => onAssignToMe(r)}
-                    style={[s.actionBtn, { borderColor: UI.line }]}
+                    style={[s.actionBtn, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}
                   >
                     <Ionicons name="person-add-outline" size={16} color={UI.text} />
                     <Text style={[s.actionTxt, { color: UI.text }]}>Assign</Text>
@@ -403,15 +553,15 @@ export default function PoliceHomeScreen({ navigation }) {
                   <TouchableOpacity
                     activeOpacity={0.9}
                     onPress={() => onMarkResolved(r)}
-                    style={[s.actionBtn, { borderColor: UI.line }]}
+                    style={[s.actionBtn, { borderColor: UI.line, backgroundColor: "#FFFFFF" }]}
                   >
                     <Ionicons name="checkmark-done-outline" size={16} color={UI.accent} />
                     <Text style={[s.actionTxt, { color: UI.text }]}>Resolve</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
-          ))}
+            </TouchableOpacity>
+          )})}
         </View>
 
         <Text style={[s.footer, { color: UI.mut }]}>Live backend: GET /api/police/reports ✅</Text>
@@ -436,9 +586,52 @@ const s = StyleSheet.create({
   safe: { flex: 1 },
   page: { padding: 16, paddingBottom: 26 },
 
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  hero: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 14,
+    overflow: "hidden",
+    shadowColor: "#B45309",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    top: -70,
+    right: -40,
+    opacity: 0.85,
+  },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  headerCopy: { flex: 1, paddingRight: 12 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  heroBand: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  heroChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  heroChipTxt: { fontSize: 12, fontWeight: "800" },
   title: { fontSize: 22, fontWeight: "900" },
   sub: { marginTop: 4, fontSize: 13, lineHeight: 18 },
+  quickBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  quickBtnTxt: { color: "#fff", fontSize: 12, fontWeight: "900" },
 
   roundBtn: {
     width: 42,
@@ -474,7 +667,17 @@ const s = StyleSheet.create({
   empty: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 },
   emptyTxt: { fontSize: 12, fontWeight: "700" },
 
-  reportCard: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 10 },
+  reportCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
   reportTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   reportId: { fontSize: 12, fontWeight: "900", opacity: 0.95 },
 
@@ -496,6 +699,18 @@ const s = StyleSheet.create({
   metaRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
   metaTxt: { fontSize: 12, fontWeight: "700" },
   metaDot: { marginHorizontal: 4, fontSize: 12, fontWeight: "900" },
+  coordRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  coordTxt: { fontSize: 12, fontWeight: "700" },
+  mapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  mapBtnTxt: { fontSize: 11, fontWeight: "900" },
 
   actionsRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
   statusPill: {

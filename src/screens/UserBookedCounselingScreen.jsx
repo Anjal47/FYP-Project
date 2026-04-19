@@ -10,10 +10,12 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
 import FloatingHelpChat from "../components/FloatingHelpChat";
+import { formatReviewSummary, submitCounselingReview } from "../utils/counselingReviews";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000";
@@ -52,6 +54,11 @@ const isOnlineMode = (modeRaw) => {
   return m === "online";
 };
 
+const isCompleted = (statusRaw) => {
+  const s = String(statusRaw || "").toLowerCase().trim();
+  return s === "completed";
+};
+
 export default function UserBookedCounselingScreen({ navigation }) {
   const UI = useMemo(
     () => ({
@@ -68,6 +75,9 @@ export default function UserBookedCounselingScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appointments, setAppointments] = useState([]);
+  const [expandedReviewId, setExpandedReviewId] = useState("");
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [submittingReviewId, setSubmittingReviewId] = useState("");
 
   const load = async () => {
     try {
@@ -101,6 +111,54 @@ export default function UserBookedCounselingScreen({ navigation }) {
   const handleSettingsPress = () => navigation.navigate("Settings");
   const handleHomePress = () => navigation.navigate("Home");
   const handleProfilePress = () => navigation.navigate("Profile");
+
+  const updateReviewDraft = (appointmentId, patch) => {
+    setReviewDrafts((prev) => ({
+      ...prev,
+      [appointmentId]: {
+        rating: prev[appointmentId]?.rating || 0,
+        comment: prev[appointmentId]?.comment || "",
+        ...patch,
+      },
+    }));
+  };
+
+  const onSubmitReview = async (appointmentId) => {
+    const draft = reviewDrafts[appointmentId] || {};
+    const rating = Number(draft.rating || 0);
+    const comment = String(draft.comment || "").trim();
+
+    if (!rating) {
+      Alert.alert("Missing rating", "Please select a star rating first.");
+      return;
+    }
+
+    try {
+      setSubmittingReviewId(appointmentId);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
+
+      const data = await submitCounselingReview(token, appointmentId, { rating, comment });
+      const savedReview = data?.review || { rating, comment };
+
+      setAppointments((prev) =>
+        prev.map((item) =>
+          String(item?.id || item?._id) === appointmentId
+            ? { ...item, myReview: savedReview }
+            : item
+        )
+      );
+      setExpandedReviewId("");
+      Alert.alert("Review saved", "Your counsellor review has been submitted.");
+    } catch (e) {
+      Alert.alert("Review failed", e?.message || "Could not submit your review");
+    } finally {
+      setSubmittingReviewId("");
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: UI.bg }]}>
@@ -172,6 +230,7 @@ export default function UserBookedCounselingScreen({ navigation }) {
                       <Text style={styles.smallMeta} numberOfLines={1}>
                         {safe(a?.month)} {safe(a?.day)} • {safe(a?.slot)} • {safe(modeValue)}
                       </Text>
+                      <Text style={styles.ratingMeta}>{formatReviewSummary(a?.counsellor?.reviewSummary)}</Text>
                     </View>
 
                     {/* ✅ message icon ONLY if Approved + Online */}
@@ -215,6 +274,76 @@ export default function UserBookedCounselingScreen({ navigation }) {
                       </Text>
                     </View>
                   </View>
+
+                  {isCompleted(a?.status) ? (
+                    <View style={styles.reviewBox}>
+                      <Text style={styles.reviewHeading}>Your Review</Text>
+                      {a?.myReview ? (
+                        <>
+                          <Text style={styles.reviewSavedStars}>
+                            {"★".repeat(a.myReview.rating)}
+                            {"☆".repeat(5 - a.myReview.rating)}
+                          </Text>
+                          <Text style={styles.reviewSavedText}>
+                            {a?.myReview?.comment || "You rated this counsellor without a written comment."}
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            style={styles.reviewToggleBtn}
+                            onPress={() => setExpandedReviewId((prev) => (prev === key ? "" : key))}
+                          >
+                            <Text style={styles.reviewToggleTxt}>
+                              {expandedReviewId === key ? "Hide Review Form" : "Rate Counsellor"}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {expandedReviewId === key ? (
+                            <View style={styles.reviewForm}>
+                              <View style={styles.starsRow}>
+                                {[1, 2, 3, 4, 5].map((star) => {
+                                  const active = star <= Number(reviewDrafts[key]?.rating || 0);
+                                  return (
+                                    <TouchableOpacity
+                                      key={`${key}-star-${star}`}
+                                      onPress={() => updateReviewDraft(key, { rating: star })}
+                                      activeOpacity={0.8}
+                                    >
+                                      <Text style={[styles.starBtn, active && styles.starBtnActive]}>
+                                        {active ? "★" : "☆"}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+
+                              <TextInput
+                                value={reviewDrafts[key]?.comment || ""}
+                                onChangeText={(text) => updateReviewDraft(key, { comment: text })}
+                                placeholder="Write a short review..."
+                                placeholderTextColor="#999"
+                                multiline
+                                style={styles.reviewInput}
+                              />
+
+                              <TouchableOpacity
+                                activeOpacity={0.9}
+                                style={[styles.reviewSubmitBtn, submittingReviewId === key && { opacity: 0.7 }]}
+                                onPress={() => onSubmitReview(key)}
+                                disabled={submittingReviewId === key}
+                              >
+                                <Text style={styles.reviewSubmitTxt}>
+                                  {submittingReviewId === key ? "Submitting..." : "Submit Review"}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                        </>
+                      )}
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
@@ -308,6 +437,7 @@ const styles = StyleSheet.create({
   cardTopRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   counsellorName: { fontSize: 15, fontWeight: "900", color: "#111" },
   smallMeta: { marginTop: 4, fontSize: 12, fontWeight: "700", color: "#666" },
+  ratingMeta: { marginTop: 6, fontSize: 12, fontWeight: "800", color: ORANGE },
 
   msgBtn: {
     width: 38,
@@ -336,6 +466,47 @@ const styles = StyleSheet.create({
   infoItem: { flex: 1 },
   infoLabel: { fontSize: 11, fontWeight: "900", color: "#777" },
   infoValue: { marginTop: 4, fontSize: 12, fontWeight: "800", color: "#111" },
+  reviewBox: {
+    marginTop: 14,
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: "#FFF7F0",
+  },
+  reviewHeading: { fontSize: 13, fontWeight: "900", color: "#111" },
+  reviewToggleBtn: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  reviewToggleTxt: { color: ORANGE, fontWeight: "900", fontSize: 12 },
+  reviewForm: { marginTop: 12 },
+  starsRow: { flexDirection: "row", gap: 10 },
+  starBtn: { fontSize: 30, color: "#C9C9C9" },
+  starBtnActive: { color: ORANGE },
+  reviewInput: {
+    marginTop: 12,
+    minHeight: 88,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#111",
+    textAlignVertical: "top",
+  },
+  reviewSubmitBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: ORANGE,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  reviewSubmitTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  reviewSavedStars: { marginTop: 8, fontSize: 18, color: ORANGE },
+  reviewSavedText: { marginTop: 8, fontSize: 12, lineHeight: 18, color: "#555", fontWeight: "700" },
 
   sidePill: {
     position: "absolute",

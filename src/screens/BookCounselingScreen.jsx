@@ -15,6 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import FloatingHelpChat from "../components/FloatingHelpChat";
 import { useAppTheme } from "../context/ThemeContext";
 import { createThemedStyles } from "../utils/themeStyles";
+import { formatReviewSummary } from "../utils/counselingReviews";
 
 const ORANGE = "#FF7A1A";
 const BASE_URL = "http://10.0.2.2:5000"; // Android emulator
@@ -319,6 +320,7 @@ export default function BookCounselorScreen({ navigation, route }) {
                   <Text style={styles.counsellorName}>{c?.fullName || "Counsellor"}</Text>
                   {!!c?.qualification && <Text style={styles.counsellorMeta}>{c.qualification}</Text>}
                   {!!c?.workingArea && <Text style={styles.counsellorMeta}>{c.workingArea}</Text>}
+                  <Text style={styles.counsellorRating}>{formatReviewSummary(c?.reviewSummary)}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -531,6 +533,7 @@ const styles = StyleSheet.create({
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#EAEAEA", marginBottom: 10 },
   counsellorName: { fontSize: 13, fontWeight: "900", color: "#111" },
   counsellorMeta: { marginTop: 4, fontSize: 11, fontWeight: "700", color: "#666" },
+  counsellorRating: { marginTop: 8, fontSize: 11, fontWeight: "800", color: "#FF7A1A" },
 
   emptyBox: { borderRadius: 18, padding: 14, marginBottom: 10 },
   reloadBtn: {

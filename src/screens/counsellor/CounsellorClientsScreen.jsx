@@ -15,6 +15,10 @@ import {
 import Feather from "react-native-vector-icons/Feather";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  formatReviewSummary,
+  submitCounselingReview,
+} from "../../utils/counselingReviews";
 
 const ORANGE = "#FF7A1A";
 const BG = "#F4F4F4";
@@ -38,6 +42,9 @@ export default function CounsellorClientsScreen({ navigation }) {
 
   // raw appointments from backend
   const [appointments, setAppointments] = useState([]);
+  const [expandedReviewId, setExpandedReviewId] = useState("");
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [submittingReviewId, setSubmittingReviewId] = useState("");
 
   const statusColor = (s) => {
     const x = String(s || "").toLowerCase();
@@ -89,6 +96,54 @@ export default function CounsellorClientsScreen({ navigation }) {
     }
   };
 
+  const updateReviewDraft = (appointmentId, patch) => {
+    setReviewDrafts((prev) => ({
+      ...prev,
+      [appointmentId]: {
+        rating: prev[appointmentId]?.rating || 0,
+        comment: prev[appointmentId]?.comment || "",
+        ...patch,
+      },
+    }));
+  };
+
+  const onSubmitReview = async (appointmentId) => {
+    const draft = reviewDrafts[appointmentId] || {};
+    const rating = Number(draft.rating || 0);
+    const comment = String(draft.comment || "").trim();
+
+    if (!rating) {
+      Alert.alert("Missing rating", "Please select a star rating first.");
+      return;
+    }
+
+    try {
+      setSubmittingReviewId(appointmentId);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        return;
+      }
+
+      const data = await submitCounselingReview(token, appointmentId, { rating, comment });
+      const savedReview = data?.review || { rating, comment };
+
+      setAppointments((prev) =>
+        prev.map((item) =>
+          String(item?.id || item?._id) === appointmentId
+            ? { ...item, myReview: savedReview }
+            : item
+        )
+      );
+      setExpandedReviewId("");
+      Alert.alert("Review saved", "Your client review has been submitted.");
+    } catch (e) {
+      Alert.alert("Review failed", e?.message || "Could not submit your review");
+    } finally {
+      setSubmittingReviewId("");
+    }
+  };
+
   /**
    * Build UNIQUE clients from appointments.
    * Keeps the most recent appointment per client.
@@ -122,6 +177,8 @@ export default function CounsellorClientsScreen({ navigation }) {
         latestStatus: String(appt?.status || "pending").toLowerCase(),
         latestWhen: `${appt?.month || ""} ${appt?.day || ""} • ${appt?.slot || ""}`.trim(),
 
+        reviewSummary: u?.reviewSummary || { averageRating: 0, reviewCount: 0 },
+        myReview: appt?.myReview || null,
         problem: appt?.request?.problem || "",
         mode: appt?.request?.mode || "",
         language: appt?.request?.language || "",
@@ -226,6 +283,7 @@ export default function CounsellorClientsScreen({ navigation }) {
                 </View>
 
                 <Text style={s.name}>{c.name}</Text>
+                <Text style={s.ratingMeta}>{formatReviewSummary(c.reviewSummary)}</Text>
 
                 {!!c.latestWhen && (
                   <View style={s.rowLine}>
@@ -264,6 +322,78 @@ export default function CounsellorClientsScreen({ navigation }) {
                     {c.desc ? c.desc : "No description provided by client."}
                   </Text>
                 </View>
+
+                {String(c.latestStatus || "").toLowerCase() === "completed" ? (
+                  <View style={s.reviewBox}>
+                    <Text style={s.reviewHeading}>Your Review For This User</Text>
+                    {c.myReview ? (
+                      <>
+                        <Text style={s.reviewSavedStars}>
+                          {"★".repeat(c.myReview.rating)}
+                          {"☆".repeat(5 - c.myReview.rating)}
+                        </Text>
+                        <Text style={s.reviewSavedText}>
+                          {c?.myReview?.comment || "You rated this user without a written comment."}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          style={s.reviewToggleBtn}
+                          onPress={() =>
+                            setExpandedReviewId((prev) => (prev === c.appointmentId ? "" : c.appointmentId))
+                          }
+                        >
+                          <Text style={s.reviewToggleTxt}>
+                            {expandedReviewId === c.appointmentId ? "Hide Review Form" : "Rate User"}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {expandedReviewId === c.appointmentId ? (
+                          <View style={s.reviewForm}>
+                            <View style={s.starsRow}>
+                              {[1, 2, 3, 4, 5].map((star) => {
+                                const active = star <= Number(reviewDrafts[c.appointmentId]?.rating || 0);
+                                return (
+                                  <TouchableOpacity
+                                    key={`${c.appointmentId}-star-${star}`}
+                                    onPress={() => updateReviewDraft(c.appointmentId, { rating: star })}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={[s.starBtn, active && s.starBtnActive]}>
+                                      {active ? "★" : "☆"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+
+                            <TextInput
+                              value={reviewDrafts[c.appointmentId]?.comment || ""}
+                              onChangeText={(text) => updateReviewDraft(c.appointmentId, { comment: text })}
+                              placeholder="Write a short review..."
+                              placeholderTextColor="#999"
+                              multiline
+                              style={s.reviewInput}
+                            />
+
+                            <TouchableOpacity
+                              activeOpacity={0.9}
+                              style={[s.reviewSubmitBtn, submittingReviewId === c.appointmentId && { opacity: 0.7 }]}
+                              onPress={() => onSubmitReview(c.appointmentId)}
+                              disabled={submittingReviewId === c.appointmentId}
+                            >
+                              <Text style={s.reviewSubmitTxt}>
+                                {submittingReviewId === c.appointmentId ? "Submitting..." : "Submit Review"}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : null}
+                      </>
+                    )}
+                  </View>
+                ) : null}
 
                 <View style={s.actionsRow}>
                   {/* ✅ Chat icon only if confirmed + Online */}
@@ -450,6 +580,7 @@ const s = StyleSheet.create({
   statusTxt: { fontSize: 11, fontWeight: "900" },
 
   name: { marginTop: 12, fontSize: 20, fontWeight: "900", color: "#111" },
+  ratingMeta: { marginTop: 6, fontSize: 12, color: ORANGE, fontWeight: "800" },
 
   rowLine: {
     width: "100%",
@@ -475,6 +606,49 @@ const s = StyleSheet.create({
 
   descTitle: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 6 },
   descText: { fontSize: 13, color: "#777", fontWeight: "700", lineHeight: 18 },
+  reviewBox: {
+    width: "100%",
+    marginTop: 14,
+    borderRadius: 16,
+    backgroundColor: "#FFF7F0",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  reviewHeading: { fontSize: 12, fontWeight: "900", color: "#111" },
+  reviewToggleBtn: {
+    marginTop: 10,
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  reviewToggleTxt: { color: ORANGE, fontSize: 12, fontWeight: "900" },
+  reviewForm: { marginTop: 12 },
+  starsRow: { flexDirection: "row", gap: 10 },
+  starBtn: { fontSize: 30, color: "#C9C9C9" },
+  starBtnActive: { color: ORANGE },
+  reviewInput: {
+    marginTop: 12,
+    minHeight: 88,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#111",
+    textAlignVertical: "top",
+  },
+  reviewSubmitBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: ORANGE,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  reviewSubmitTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
+  reviewSavedStars: { marginTop: 8, fontSize: 18, color: ORANGE },
+  reviewSavedText: { marginTop: 8, fontSize: 12, lineHeight: 18, color: "#555", fontWeight: "700" },
 
   actionsRow: { marginTop: 14, flexDirection: "row", gap: 10, flexWrap: "wrap" },
   actionBtn: {

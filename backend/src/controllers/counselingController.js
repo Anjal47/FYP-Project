@@ -1,12 +1,108 @@
 // controllers/counselingController.js
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const CounselingRequest = require("../models/CounselingRequest");
 const CounselingAppointment = require("../models/CounselingAppointment");
+const CounselingReview = require("../models/CounselingReview");
 
 /**
  * Safe user id getter (supports req.user.id or req.user._id)
  */
 const getAuthId = (req) => String(req?.user?._id || req?.user?.id || "");
+const toObjectIdList = (values = []) =>
+  values
+    .map((value) => {
+      if (!value) return null;
+      if (value instanceof mongoose.Types.ObjectId) return value;
+      if (!mongoose.Types.ObjectId.isValid(String(value))) return null;
+      return new mongoose.Types.ObjectId(String(value));
+    })
+    .filter(Boolean);
+
+async function getReviewSummaryMapForUsers(userIds = []) {
+  const ids = toObjectIdList(userIds);
+  if (!ids.length) return new Map();
+
+  const rows = await CounselingReview.aggregate([
+    { $match: { revieweeId: { $in: ids } } },
+    {
+      $group: {
+        _id: "$revieweeId",
+        averageRating: { $avg: "$rating" },
+        reviewCount: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return new Map(
+    rows.map((row) => [
+      String(row._id),
+      {
+        averageRating: Number((row.averageRating || 0).toFixed(1)),
+        reviewCount: row.reviewCount || 0,
+      },
+    ])
+  );
+}
+
+async function getMyReviewMapForAppointments(reviewerId, appointmentIds = []) {
+  const ids = toObjectIdList(appointmentIds);
+  if (!reviewerId || !ids.length) return new Map();
+
+  const reviews = await CounselingReview.find({
+    reviewerId,
+    appointmentId: { $in: ids },
+  })
+    .select("_id appointmentId rating comment createdAt")
+    .sort({ createdAt: -1 });
+
+  return new Map(
+    reviews.map((review) => [
+      String(review.appointmentId),
+      {
+        id: review._id,
+        rating: review.rating,
+        comment: review.comment || "",
+        createdAt: review.createdAt,
+      },
+    ])
+  );
+}
+
+async function getReceivedReviewsPayloadForUser(userId) {
+  const summaryMap = await getReviewSummaryMapForUsers([userId]);
+  const summary = summaryMap.get(String(userId)) || { averageRating: 0, reviewCount: 0 };
+
+  const reviews = await CounselingReview.find({ revieweeId: userId })
+    .populate("reviewerId", "fullName role")
+    .populate("appointmentId", "month day slot status")
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+  return {
+    summary,
+    reviews: reviews.map((review) => ({
+      id: review._id,
+      rating: review.rating,
+      comment: review.comment || "",
+      createdAt: review.createdAt,
+      reviewer: {
+        id: review.reviewerId?._id,
+        fullName: review.reviewerId?.fullName || "Anonymous",
+        role: review.reviewerRole || review.reviewerId?.role || "",
+      },
+      appointment: review.appointmentId
+        ? {
+            id: review.appointmentId._id,
+            month: review.appointmentId.month || "",
+            day: review.appointmentId.day || "",
+            slot: review.appointmentId.slot || "",
+            status: review.appointmentId.status || "",
+          }
+        : null,
+    })),
+  };
+}
 
 /**
  * POST /api/counseling/requests
@@ -69,6 +165,8 @@ exports.listCounsellors = async (req, res) => {
       .select("_id fullName email role bio qualification workingArea phone")
       .sort({ createdAt: -1 });
 
+    const reviewSummaryMap = await getReviewSummaryMapForUsers(counsellors.map((c) => c._id));
+
     return res.json({
       ok: true,
       counsellors: counsellors.map((c) => ({
@@ -80,6 +178,11 @@ exports.listCounsellors = async (req, res) => {
         bio: c.bio || "",
         qualification: c.qualification || "",
         workingArea: c.workingArea || "",
+        reviewSummary:
+          reviewSummaryMap.get(String(c._id)) || {
+            averageRating: 0,
+            reviewCount: 0,
+          },
       })),
     });
   } catch (e) {
@@ -219,6 +322,14 @@ exports.getMyCounselingAppointments = async (req, res) => {
       .populate("requestId")
       .sort({ createdAt: -1 });
 
+    const reviewSummaryMap = await getReviewSummaryMapForUsers(
+      appts.map((a) => a?.counsellorId?._id).filter(Boolean)
+    );
+    const myReviewMap = await getMyReviewMapForAppointments(
+      userId,
+      appts.map((a) => a._id)
+    );
+
     return res.json({
       ok: true,
       appointments: appts.map((a) => ({
@@ -238,9 +349,15 @@ exports.getMyCounselingAppointments = async (req, res) => {
               phone: a.counsellorId.phone || "",
               workingArea: a.counsellorId.workingArea || "",
               qualification: a.counsellorId.qualification || "",
+              reviewSummary:
+                reviewSummaryMap.get(String(a.counsellorId._id)) || {
+                  averageRating: 0,
+                  reviewCount: 0,
+                },
             }
           : null,
         requestId: a.requestId || null,
+        myReview: myReviewMap.get(String(a._id)) || null,
       })),
     });
   } catch (e) {
@@ -260,6 +377,14 @@ exports.getCounsellorAppointments = async (req, res) => {
       .populate("requestId", "problem age gender language mode description")
       .sort({ createdAt: -1 });
 
+    const reviewSummaryMap = await getReviewSummaryMapForUsers(
+      appts.map((a) => a?.userId?._id).filter(Boolean)
+    );
+    const myReviewMap = await getMyReviewMapForAppointments(
+      counsellorId,
+      appts.map((a) => a._id)
+    );
+
     return res.json({
       ok: true,
       appointments: appts.map((a) => ({
@@ -276,6 +401,11 @@ exports.getCounsellorAppointments = async (req, res) => {
               fullName: a.userId.fullName,
               email: a.userId.email,
               phone: a.userId.phone || "",
+              reviewSummary:
+                reviewSummaryMap.get(String(a.userId._id)) || {
+                  averageRating: 0,
+                  reviewCount: 0,
+                },
             }
           : null,
         request: a.requestId
@@ -289,6 +419,7 @@ exports.getCounsellorAppointments = async (req, res) => {
               description: a.requestId.description || "",
             }
           : null,
+        myReview: myReviewMap.get(String(a._id)) || null,
       })),
     });
   } catch (e) {
@@ -339,5 +470,103 @@ exports.counsellorDeclineAppointment = async (req, res) => {
     return res.json({ ok: true, appointment: { id: appt._id, status: appt.status } });
   } catch (e) {
     return res.status(500).json({ ok: false, message: "Failed to decline appointment" });
+  }
+};
+
+exports.counsellorCompleteAppointment = async (req, res) => {
+  try {
+    const counsellorId = getAuthId(req);
+
+    const appt = await CounselingAppointment.findOne({ _id: req.params.id, counsellorId });
+    if (!appt) return res.status(404).json({ ok: false, message: "Appointment not found" });
+
+    if (appt.status !== "confirmed") {
+      return res.status(400).json({ ok: false, message: `Cannot complete. Current status: ${appt.status}` });
+    }
+
+    appt.status = "completed";
+    await appt.save();
+
+    return res.json({ ok: true, appointment: { id: appt._id, status: appt.status } });
+  } catch (e) {
+    return res.status(500).json({ ok: false, message: "Failed to mark appointment complete" });
+  }
+};
+
+exports.submitCounselingReview = async (req, res) => {
+  try {
+    const authId = getAuthId(req);
+    const { id: appointmentId } = req.params;
+    const numericRating = Number(req.body?.rating);
+    const comment = String(req.body?.comment || "").trim();
+
+    if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ ok: false, message: "rating must be an integer from 1 to 5" });
+    }
+
+    const appointment = await CounselingAppointment.findById(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ ok: false, message: "Appointment not found" });
+    }
+
+    if (appointment.status !== "completed") {
+      return res.status(400).json({ ok: false, message: "Reviews are allowed only for completed appointments" });
+    }
+
+    let revieweeId = null;
+    let reviewerRole = null;
+    let revieweeRole = null;
+
+    if (String(appointment.userId) === authId) {
+      revieweeId = appointment.counsellorId;
+      reviewerRole = "user";
+      revieweeRole = "counsellor";
+    } else if (String(appointment.counsellorId) === authId) {
+      revieweeId = appointment.userId;
+      reviewerRole = "counsellor";
+      revieweeRole = "user";
+    } else {
+      return res.status(403).json({ ok: false, message: "You cannot review this appointment" });
+    }
+
+    const existing = await CounselingReview.findOne({ appointmentId, reviewerId: authId });
+    if (existing) {
+      return res.status(409).json({ ok: false, message: "You already reviewed this appointment" });
+    }
+
+    const review = await CounselingReview.create({
+      appointmentId,
+      reviewerId: authId,
+      revieweeId,
+      reviewerRole,
+      revieweeRole,
+      rating: numericRating,
+      comment,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      review: {
+        id: review._id,
+        rating: review.rating,
+        comment: review.comment || "",
+        createdAt: review.createdAt,
+      },
+    });
+  } catch (e) {
+    if (e?.code === 11000) {
+      return res.status(409).json({ ok: false, message: "You already reviewed this appointment" });
+    }
+    return res.status(500).json({ ok: false, message: "Failed to submit review", error: e?.message });
+  }
+};
+
+exports.getMyReceivedCounselingReviews = async (req, res) => {
+  try {
+    const authId = getAuthId(req);
+    const payload = await getReceivedReviewsPayloadForUser(authId);
+    return res.json({ ok: true, ...payload });
+  } catch (e) {
+    return res.status(500).json({ ok: false, message: "Failed to load reviews", error: e?.message });
   }
 };

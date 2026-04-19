@@ -19,14 +19,6 @@ const TrafficHomeScreen = ({ navigation }) => {
     () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
     [theme, isDark]
   );
-  const fineData = {
-    _id: "69c8b6b831e935eb98196c6a",
-    fineCode: "FINE-TEST-001",
-    reason: "Over Speeding",
-    amount: 1500,
-    status: "UNPAID",
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -71,7 +63,7 @@ const TrafficHomeScreen = ({ navigation }) => {
             title="Pay Fine"
             subtitle="Manage and clear penalties."
             onPress={() => {
-              navigation.navigate("FinePayment", { fine: fineData });
+              navigation.navigate("FinePayment");
             }}
           />
 

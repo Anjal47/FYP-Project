@@ -13,6 +13,11 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
+import {
+  formatPinnedLocation,
+  getCurrentPreciseLocation,
+  showLocationUnavailableAlert,
+} from "../utils/location";
 
 const ORANGE = "#FF7A1A";
 
@@ -30,6 +35,8 @@ export default function MunicipalityReportCreateScreen({ navigation, route }) {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [media, setMedia] = useState({ photo: null, video: null });
+  const [geoLocation, setGeoLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const typeValue = useMemo(() => {
@@ -58,6 +65,21 @@ export default function MunicipalityReportCreateScreen({ navigation, route }) {
       setMedia((prev) => ({ ...prev, video: file }));
     } catch (e) {
       Alert.alert("Picker Error", e?.message || "Could not pick video");
+    }
+  };
+
+  const onUseCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const current = await getCurrentPreciseLocation();
+      setGeoLocation(current);
+      setArea((prev) =>
+        String(prev || "").trim() ? prev : `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`
+      );
+    } catch (e) {
+      showLocationUnavailableAlert(e);
+    } finally {
+      setLocating(false);
     }
   };
 
@@ -95,6 +117,7 @@ export default function MunicipalityReportCreateScreen({ navigation, route }) {
         area: String(area).trim(),
         description: String(description || "").trim(),
         priority,
+        geoLocation,
       };
 
       const out = await createReportRequest(token, payload, media);
@@ -107,6 +130,7 @@ export default function MunicipalityReportCreateScreen({ navigation, route }) {
             text: "OK",
             onPress: () => {
               setMedia({ photo: null, video: null });
+              setGeoLocation(null);
               navigation.goBack?.();
             },
           },
@@ -180,6 +204,27 @@ export default function MunicipalityReportCreateScreen({ navigation, route }) {
               placeholderTextColor="#9A9A9A"
               style={s.input}
             />
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={onUseCurrentLocation}
+            disabled={locating || submitting}
+            style={[s.locationPinBtn, (locating || submitting) && { opacity: 0.7 }]}
+          >
+            {locating ? (
+              <View style={s.locationPinRow}>
+                <ActivityIndicator size="small" color={ORANGE} />
+                <Text style={s.locationPinText}>Pinning current location...</Text>
+              </View>
+            ) : (
+              <Text style={s.locationPinText}>Use Current Location</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={s.pinInfoBox}>
+            <Text style={s.pinInfoTitle}>Pinned point</Text>
+            <Text style={s.pinInfoValue}>{formatPinnedLocation(geoLocation)}</Text>
           </View>
         </View>
 
@@ -360,6 +405,28 @@ const s = StyleSheet.create({
     gap: 10,
   },
   input: { flex: 1, color: "#111", fontSize: 14, fontWeight: "700" },
+  locationPinBtn: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: ORANGE,
+    borderRadius: 16,
+    backgroundColor: "#FFF7F0",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  locationPinRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  locationPinText: { color: ORANGE, fontSize: 13, fontWeight: "800" },
+  pinInfoBox: {
+    backgroundColor: "#FFF9F3",
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#FFE2C6",
+  },
+  pinInfoTitle: { color: "#111", fontSize: 13, fontWeight: "800" },
+  pinInfoValue: { marginTop: 6, color: "#666", fontSize: 12, lineHeight: 17 },
 
   textarea: {
     marginTop: 10,

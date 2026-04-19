@@ -44,6 +44,7 @@ import TherapistHomeScreen from "../screens/Therapist/TherapistHomeScreen";
 import CounsellorChatScreen from "../screens/Counsellor/CounsellorChatScreen";
 /* -------------------- POLICE SCREENS (adjust paths) -------------------- */
 import PoliceHomeScreen from "../screens/Police/PoliceHomeScreen";
+import TrafficFineCreateScreen from "../screens/Police/TrafficFineCreateScreen";
 
 /* -------------------- ADMIN (Tabs) -------------------- */
 import AdminTabs from "./AdminTabs"; // create this file in src/navigation/AdminTabs.jsx
@@ -194,6 +195,7 @@ export default function AuthStack() {
 
         {/* POLICE */}
         <Stack.Screen name="PoliceHome" component={PoliceHomeScreen} />
+        <Stack.Screen name="TrafficFineCreate" component={TrafficFineCreateScreen} />
          <Stack.Screen name="MunicipalityReportCreate" component={MunicipalityReportCreateScreen} />
 
   <Stack.Screen

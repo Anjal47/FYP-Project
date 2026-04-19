@@ -115,6 +115,7 @@ exports.getPoliceReports = async (req, res) => {
       type: r.type,
       title: r.type,
       area: r.area,
+      geoLocation: r.geoLocation || null,
       description: r.description || "",
       priority: r.priority,
       status: r.status,
