@@ -7,8 +7,7 @@ router.post("/fines", auth, requireRole("police"), ctrl.createFine);
 router.get("/fines/mine", auth, ctrl.getMyFines);
 router.post("/payments/initiate", auth, ctrl.initiatePayment);
 router.post("/payments/verify", auth, ctrl.verifyPayment);
-router.get("/payments/:paymentId/esewa", ctrl.renderEsewaForm);
-router.get("/payments/esewa/success", ctrl.handleEsewaSuccess);
-router.get("/payments/esewa/failure", ctrl.handleEsewaFailure);
+router.get("/payments/stripe/success", ctrl.handleStripeSuccess);
+router.get("/payments/stripe/cancel", ctrl.handleStripeCancel);
 
 module.exports = router;

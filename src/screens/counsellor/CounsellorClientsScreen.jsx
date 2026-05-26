@@ -1,701 +1,739 @@
-// src/screens/counsellor/CounsellorClientsScreen.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Dimensions,
-  ActivityIndicator,
-  Alert,
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert } from "react-native";
 import Feather from "react-native-vector-icons/Feather";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {
-  formatReviewSummary,
-  submitCounselingReview,
-} from "../../utils/counselingReviews";
-
-const ORANGE = "#FF7A1A";
-const BG = "#F4F4F4";
+import { useAppTheme } from "../../context/ThemeContext";
+import { formatReviewSummary, submitCounselingReview } from "../../utils/counselingReviews";
+import { useTranslate } from "../../utils/localization";
 const BASE_URL = "http://10.0.2.2:5000";
-
-const { width: SCREEN_W } = Dimensions.get("window");
-
-/**
- * CounsellorClientsScreen (Booked Clients)
- * - Fetches counsellor appointments
- * - Builds UNIQUE client list from appointments (latest booking per client)
- * - Shows Message icon ONLY if:
- *   ✅ appointment.status = confirmed
- *   ✅ request.mode = Online
- */
-export default function CounsellorClientsScreen({ navigation }) {
+export default function CounsellorClientsScreen({
+  navigation
+}) {
+  const translate = useTranslate();
+  const {
+    theme,
+    isDark
+  } = useAppTheme();
+  const styles = useMemo(() => StyleSheet.create(createStyles(theme, isDark)), [theme, isDark]);
   const [search, setSearch] = useState("");
-
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // raw appointments from backend
   const [appointments, setAppointments] = useState([]);
   const [expandedReviewId, setExpandedReviewId] = useState("");
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [submittingReviewId, setSubmittingReviewId] = useState("");
-
-  const statusColor = (s) => {
-    const x = String(s || "").toLowerCase();
-    if (x === "confirmed") return "#22C55E";
-    if (x === "pending") return "#F59E0B";
-    if (x === "cancelled") return "#EF4444";
-    if (x === "completed") return "#22C55E";
-    return "#999";
-  };
-
-  const loadAppointments = async (opts = { quiet: false }) => {
-    const { quiet } = opts || {};
+  const loadAppointments = useCallback(async () => {
     try {
-      if (!quiet) setLoading(true);
-
+      setLoading(true);
       const token = await AsyncStorage.getItem("token");
       if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: "Login"
+          }]
+        });
         return;
       }
-
       const res = await fetch(`${BASE_URL}/api/counseling/counsellor/appointments`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.message || "Failed to load booked clients");
-
       setAppointments(Array.isArray(data?.appointments) ? data.appointments : []);
-    } catch (e) {
-      Alert.alert("Booked Clients", e?.message || "Could not load booked clients");
+    } catch (error) {
+      Alert.alert(translate("Booked Clients"), error?.message || "Could not load booked clients");
     } finally {
-      if (!quiet) setLoading(false);
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const unsub = navigation.addListener("focus", () => loadAppointments({ quiet: false }));
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigation]);
-
-  const onRefresh = async () => {
-    try {
-      setRefreshing(true);
-      await loadAppointments({ quiet: true });
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const updateReviewDraft = (appointmentId, patch) => {
-    setReviewDrafts((prev) => ({
-      ...prev,
-      [appointmentId]: {
-        rating: prev[appointmentId]?.rating || 0,
-        comment: prev[appointmentId]?.comment || "",
-        ...patch,
-      },
-    }));
-  };
-
-  const onSubmitReview = async (appointmentId) => {
-    const draft = reviewDrafts[appointmentId] || {};
-    const rating = Number(draft.rating || 0);
-    const comment = String(draft.comment || "").trim();
-
-    if (!rating) {
-      Alert.alert("Missing rating", "Please select a star rating first.");
-      return;
-    }
-
-    try {
-      setSubmittingReviewId(appointmentId);
-      const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-        return;
-      }
-
-      const data = await submitCounselingReview(token, appointmentId, { rating, comment });
-      const savedReview = data?.review || { rating, comment };
-
-      setAppointments((prev) =>
-        prev.map((item) =>
-          String(item?.id || item?._id) === appointmentId
-            ? { ...item, myReview: savedReview }
-            : item
-        )
-      );
-      setExpandedReviewId("");
-      Alert.alert("Review saved", "Your client review has been submitted.");
-    } catch (e) {
-      Alert.alert("Review failed", e?.message || "Could not submit your review");
-    } finally {
-      setSubmittingReviewId("");
-    }
-  };
-
-  /**
-   * Build UNIQUE clients from appointments.
-   * Keeps the most recent appointment per client.
-   */
+  useEffect(() => {
+    const unsub = navigation.addListener("focus", loadAppointments);
+    return unsub;
+  }, [navigation, loadAppointments]);
   const bookedClients = useMemo(() => {
-    // newest first
     const sorted = [...appointments].sort((a, b) => {
       const ta = new Date(a?.updatedAt || a?.createdAt || 0).getTime();
       const tb = new Date(b?.updatedAt || b?.createdAt || 0).getTime();
       return tb - ta;
     });
-
-    const map = new Map(); // userId -> clientObj
-
+    const map = new Map();
     for (const appt of sorted) {
-      const u = appt?.user; // backend populates userId as "user"
-      const userId = u?._id || u?.id || appt?.userId || appt?.user;
-
-      if (!userId) continue;
-      if (map.has(userId)) continue;
-
-      const apptId = appt?.id || appt?._id; // ✅ IMPORTANT for chat
-
+      const user = appt?.user;
+      const userId = user?._id || user?.id || appt?.userId || appt?.user;
+      if (!userId || map.has(userId)) continue;
+      const apptId = appt?.id || appt?._id;
       map.set(userId, {
         id: String(userId),
         appointmentId: apptId ? String(apptId) : "",
-        name: u?.fullName || "Client",
-        email: u?.email || "",
-        phone: u?.phone || "",
-
+        name: user?.fullName || "Client",
+        email: user?.email || "",
+        phone: user?.phone || "",
         latestStatus: String(appt?.status || "pending").toLowerCase(),
-        latestWhen: `${appt?.month || ""} ${appt?.day || ""} • ${appt?.slot || ""}`.trim(),
-
-        reviewSummary: u?.reviewSummary || { averageRating: 0, reviewCount: 0 },
+        latestWhen: `${appt?.month || ""} ${appt?.day || ""}`.trim(),
+        latestSlot: appt?.slot || "",
+        reviewSummary: user?.reviewSummary || {
+          averageRating: 0,
+          reviewCount: 0
+        },
         myReview: appt?.myReview || null,
         problem: appt?.request?.problem || "",
         mode: appt?.request?.mode || "",
         language: appt?.request?.language || "",
-        desc: appt?.request?.description || "",
+        desc: appt?.request?.description || ""
       });
     }
-
     return Array.from(map.values());
   }, [appointments]);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return bookedClients;
-
-    return bookedClients.filter((c) => {
-      return (
-        (c.name || "").toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.phone || "").toLowerCase().includes(q) ||
-        (c.problem || "").toLowerCase().includes(q) ||
-        (c.latestStatus || "").toLowerCase().includes(q)
-      );
-    });
+    return bookedClients.filter(client => [client.name, client.email, client.phone, client.problem, client.latestStatus].filter(Boolean).join(" ").toLowerCase().includes(q));
   }, [bookedClients, search]);
-
-  // ✅ show chat only if confirmed + online
-  const canChat = (c) => {
-    const okStatus = String(c.latestStatus || "").toLowerCase() === "confirmed";
-    const okMode = String(c.mode || "").toLowerCase() === "online";
-    return okStatus && okMode && !!c.appointmentId;
+  const stats = useMemo(() => {
+    const completed = bookedClients.filter(client => client.latestStatus === "completed").length;
+    const chatReady = bookedClients.filter(client => canChat(client)).length;
+    return {
+      total: bookedClients.length,
+      completed,
+      chatReady
+    };
+  }, [bookedClients]);
+  const updateReviewDraft = (appointmentId, patch) => {
+    setReviewDrafts(prev => ({
+      ...prev,
+      [appointmentId]: {
+        rating: prev[appointmentId]?.rating || 0,
+        comment: prev[appointmentId]?.comment || "",
+        ...patch
+      }
+    }));
   };
+  const onSubmitReview = async appointmentId => {
+    const draft = reviewDrafts[appointmentId] || {};
+    const rating = Number(draft.rating || 0);
+    const comment = String(draft.comment || "").trim();
+    if (!rating) {
+      Alert.alert(translate("Missing rating"), translate("Please select a star rating first."));
+      return;
+    }
+    try {
+      setSubmittingReviewId(appointmentId);
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: "Login"
+          }]
+        });
+        return;
+      }
+      const data = await submitCounselingReview(token, appointmentId, {
+        rating,
+        comment
+      });
+      const savedReview = data?.review || {
+        rating,
+        comment
+      };
+      setAppointments(prev => prev.map(item => String(item?.id || item?._id) === appointmentId ? {
+        ...item,
+        myReview: savedReview
+      } : item));
+      setExpandedReviewId("");
+      Alert.alert(translate("Review saved"), translate("Your client review has been submitted."));
+    } catch (error) {
+      Alert.alert(translate("Review failed"), error?.message || "Could not submit your review");
+    } finally {
+      setSubmittingReviewId("");
+    }
+  };
+  function canChat(client) {
+    const okStatus = String(client.latestStatus || "").toLowerCase() === "confirmed";
+    const okMode = String(client.mode || "").toLowerCase() === "online";
+    return okStatus && okMode && !!client.appointmentId;
+  }
+  return <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <View style={styles.topBar}>
+            <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <View style={styles.backIconWrap}>
+                <Feather name="arrow-left" size={18} color={theme.text} />
+              </View>
+              <Text style={styles.backText}>{translate("Back")}</Text>
+            </TouchableOpacity>
 
-  const goBack = () => navigation.goBack();
-  const goHome = () => navigation.navigate("CounsellorHome");
+            <TouchableOpacity style={styles.settingsButton} onPress={() => navigation.navigate("Settings")} activeOpacity={0.88}>
+              <Feather name="settings" size={17} color={theme.text} />
+            </TouchableOpacity>
+          </View>
 
-  return (
-    <SafeAreaView style={s.container}>
-      {/* Header */}
-      <View style={s.headerCard}>
-        <View style={s.headerRow}>
-          <TouchableOpacity activeOpacity={0.85} style={s.backBtn} onPress={goBack}>
-            <Feather name="arrow-left" size={22} color="#111" />
-          </TouchableOpacity>
+          <View style={styles.heroGlow} />
+          <Text style={styles.eyebrow}>{translate("Clients")}</Text>
+          <Text style={styles.title}>{translate("One card per client, with the latest context up front.")}</Text>
+          <Text style={styles.subtitle}>{translate("Repeated session rows were collapsed into a clearer client view so chat, status, and reviews appear once in the place they actually belong.")}</Text>
 
-          <Text style={s.title}>
-            <Text style={s.titleAccent}>Booked</Text>
-            <Text style={s.titleMain}>Clients.</Text>
-          </Text>
-
-          <TouchableOpacity activeOpacity={0.9} onPress={onRefresh} style={s.refreshBtn}>
-            {refreshing ? <ActivityIndicator color="#111" /> : <Feather name="refresh-cw" size={18} color="#111" />}
-          </TouchableOpacity>
-        </View>
-
-        <View style={s.searchRow}>
-          <View style={s.searchBar}>
-            <Feather name="search" size={16} color="#9A9A9A" />
-            <TextInput
-              value={search}
-              onChangeText={setSearch}
-              placeholder="Search name, email, status, problem..."
-              placeholderTextColor="#9A9A9A"
-              style={s.searchInput}
-            />
-            {!!search && (
-              <TouchableOpacity activeOpacity={0.8} onPress={() => setSearch("")} style={s.clearBtn}>
-                <Feather name="x" size={16} color="#666" />
-              </TouchableOpacity>
-            )}
+          <View style={styles.statsRow}>
+            <MetricCard styles={styles} label={translate("Clients")} value={stats.total} />
+            <MetricCard styles={styles} label={translate("Chat Ready")} value={stats.chatReady} />
+            <MetricCard styles={styles} label={translate("Reviewable")} value={stats.completed} />
           </View>
         </View>
 
-        <Text style={s.miniHint}>Showing clients who booked sessions with you (from appointments).</Text>
-      </View>
-
-      {/* Body */}
-      <View style={s.bodyWrap}>
-        {loading ? (
-          <View style={s.loadingBox}>
-            <ActivityIndicator size="large" color={ORANGE} />
-            <Text style={s.loadingTxt}>Loading booked clients…</Text>
+        <View style={styles.searchCard}>
+          <View style={styles.searchRow}>
+            <Feather name="search" size={16} color={theme.muted} />
+            <TextInput value={search} onChangeText={setSearch} placeholder={translate("Search client, concern, or status")} placeholderTextColor={theme.muted} style={styles.searchInput} />
+            {!!search && <TouchableOpacity onPress={() => setSearch("")} activeOpacity={0.85}>
+                <Feather name="x-circle" size={18} color={theme.muted} />
+              </TouchableOpacity>}
           </View>
-        ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.hScrollContent}
-            snapToInterval={SCREEN_W * 0.82 + 18}
-            decelerationRate="fast"
-          >
-            {filtered.map((c) => (
-              <View key={c.id} style={s.card}>
-                <View style={s.topRow}>
-                  <View style={s.avatar} />
+        </View>
 
-                  <View style={[s.statusPill, { borderColor: statusColor(c.latestStatus) }]}>
-                    <View style={[s.dot, { backgroundColor: statusColor(c.latestStatus) }]} />
-                    <Text style={[s.statusTxt, { color: statusColor(c.latestStatus) }]}>
-                      {String(c.latestStatus || "pending").toUpperCase()}
-                    </Text>
-                  </View>
+        {loading ? <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color={theme.accentStrong} />
+            <Text style={styles.loadingText}>{translate("Loading booked clients...")}</Text>
+          </View> : filtered.length === 0 ? <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>{translate("No clients found")}</Text>
+            <Text style={styles.emptyText}>{translate("If users have not booked sessions yet, this list stays empty.")}</Text>
+          </View> : filtered.map(client => <View key={client.id} style={styles.card}>
+              <View style={styles.cardTop}>
+                <View style={styles.avatar}>
+                  <Ionicons name="person-outline" size={20} color={theme.accentStrong} />
                 </View>
-
-                <Text style={s.name}>{c.name}</Text>
-                <Text style={s.ratingMeta}>{formatReviewSummary(c.reviewSummary)}</Text>
-
-                {!!c.latestWhen && (
-                  <View style={s.rowLine}>
-                    <Feather name="calendar" size={14} color={ORANGE} />
-                    <Text style={s.rowText}>{c.latestWhen}</Text>
-                  </View>
-                )}
-
-                {!!c.problem && (
-                  <View style={s.rowLine}>
-                    <Feather name="activity" size={14} color={ORANGE} />
-                    <Text style={s.rowText}>
-                      {c.problem}
-                      {(c.mode || c.language) ? ` • ${c.mode || ""}${c.language ? `, ${c.language}` : ""}` : ""}
-                    </Text>
-                  </View>
-                )}
-
-                {!!c.email && (
-                  <View style={s.rowLine}>
-                    <Feather name="mail" size={14} color={ORANGE} />
-                    <Text style={s.rowText}>{c.email}</Text>
-                  </View>
-                )}
-
-                {!!c.phone && (
-                  <View style={s.rowLine}>
-                    <Feather name="phone" size={14} color={ORANGE} />
-                    <Text style={s.rowText}>{c.phone}</Text>
-                  </View>
-                )}
-
-                <View style={s.descBox}>
-                  <Text style={s.descTitle}>Notes</Text>
-                  <Text style={s.descText} numberOfLines={4}>
-                    {c.desc ? c.desc : "No description provided by client."}
-                  </Text>
+                <View style={styles.cardCopy}>
+                  <Text style={styles.clientName}>{client.name}</Text>
+                  <Text style={styles.clientMeta}>{formatReviewSummary(client.reviewSummary)}</Text>
                 </View>
+                <StatusBadge styles={styles} status={client.latestStatus} />
+              </View>
 
-                {String(c.latestStatus || "").toLowerCase() === "completed" ? (
-                  <View style={s.reviewBox}>
-                    <Text style={s.reviewHeading}>Your Review For This User</Text>
-                    {c.myReview ? (
-                      <>
-                        <Text style={s.reviewSavedStars}>
-                          {"★".repeat(c.myReview.rating)}
-                          {"☆".repeat(5 - c.myReview.rating)}
+              <View style={styles.metaGrid}>
+                {!!client.latestWhen && <MetaTile styles={styles} icon="calendar" label={translate("Latest Session")} value={`${client.latestWhen}${client.latestSlot ? ` • ${client.latestSlot}` : ""}`} theme={theme} />}
+                {!!client.problem && <MetaTile styles={styles} icon="activity" label={translate("Concern")} value={client.problem} theme={theme} />}
+                {!!(client.mode || client.language) && <MetaTile styles={styles} icon="video" label={translate("Format")} value={[client.mode, client.language].filter(Boolean).join(" • ")} theme={theme} />}
+                {!!(client.email || client.phone) && <MetaTile styles={styles} icon="user" label={translate("Contact")} value={[client.email, client.phone].filter(Boolean).join(" • ")} theme={theme} />}
+              </View>
+
+              <View style={styles.notesCard}>
+                <Text style={styles.notesLabel}>{translate("Latest Notes")}</Text>
+                <Text style={styles.notesText}>
+                  {client.desc ? client.desc : "No description provided by client."}
+                </Text>
+              </View>
+
+              {String(client.latestStatus || "").toLowerCase() === "completed" ? <View style={styles.reviewCard}>
+                  <Text style={styles.reviewTitle}>{translate("Review this user")}</Text>
+                  {client.myReview ? <>
+                      <Text style={styles.reviewStars}>
+                        {"★".repeat(client.myReview.rating)}
+                        {"☆".repeat(5 - client.myReview.rating)}
+                      </Text>
+                      <Text style={styles.reviewText}>
+                        {client?.myReview?.comment || "You rated this user without a written comment."}
+                      </Text>
+                    </> : <>
+                      <TouchableOpacity style={styles.reviewToggle} onPress={() => setExpandedReviewId(prev => prev === client.appointmentId ? "" : client.appointmentId)} activeOpacity={0.88}>
+                        <Text style={styles.reviewToggleText}>
+                          {expandedReviewId === client.appointmentId ? "Hide review form" : "Rate user"}
                         </Text>
-                        <Text style={s.reviewSavedText}>
-                          {c?.myReview?.comment || "You rated this user without a written comment."}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          activeOpacity={0.85}
-                          style={s.reviewToggleBtn}
-                          onPress={() =>
-                            setExpandedReviewId((prev) => (prev === c.appointmentId ? "" : c.appointmentId))
-                          }
-                        >
-                          <Text style={s.reviewToggleTxt}>
-                            {expandedReviewId === c.appointmentId ? "Hide Review Form" : "Rate User"}
-                          </Text>
-                        </TouchableOpacity>
+                      </TouchableOpacity>
 
-                        {expandedReviewId === c.appointmentId ? (
-                          <View style={s.reviewForm}>
-                            <View style={s.starsRow}>
-                              {[1, 2, 3, 4, 5].map((star) => {
-                                const active = star <= Number(reviewDrafts[c.appointmentId]?.rating || 0);
-                                return (
-                                  <TouchableOpacity
-                                    key={`${c.appointmentId}-star-${star}`}
-                                    onPress={() => updateReviewDraft(c.appointmentId, { rating: star })}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={[s.starBtn, active && s.starBtnActive]}>
-                                      {active ? "★" : "☆"}
-                                    </Text>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </View>
-
-                            <TextInput
-                              value={reviewDrafts[c.appointmentId]?.comment || ""}
-                              onChangeText={(text) => updateReviewDraft(c.appointmentId, { comment: text })}
-                              placeholder="Write a short review..."
-                              placeholderTextColor="#999"
-                              multiline
-                              style={s.reviewInput}
-                            />
-
-                            <TouchableOpacity
-                              activeOpacity={0.9}
-                              style={[s.reviewSubmitBtn, submittingReviewId === c.appointmentId && { opacity: 0.7 }]}
-                              onPress={() => onSubmitReview(c.appointmentId)}
-                              disabled={submittingReviewId === c.appointmentId}
-                            >
-                              <Text style={s.reviewSubmitTxt}>
-                                {submittingReviewId === c.appointmentId ? "Submitting..." : "Submit Review"}
-                              </Text>
-                            </TouchableOpacity>
+                      {expandedReviewId === client.appointmentId ? <View style={styles.reviewForm}>
+                          <View style={styles.starsRow}>
+                            {[1, 2, 3, 4, 5].map(star => {
+                  const active = star <= Number(reviewDrafts[client.appointmentId]?.rating || 0);
+                  return <TouchableOpacity key={`${client.appointmentId}-star-${star}`} onPress={() => updateReviewDraft(client.appointmentId, {
+                    rating: star
+                  })} activeOpacity={0.8}>
+                                  <Text style={[styles.starButton, active && styles.starButtonActive]}>
+                                    {active ? "★" : "☆"}
+                                  </Text>
+                                </TouchableOpacity>;
+                })}
                           </View>
-                        ) : null}
-                      </>
-                    )}
-                  </View>
-                ) : null}
 
-                <View style={s.actionsRow}>
-                  {/* ✅ Chat icon only if confirmed + Online */}
-                  {canChat(c) && (
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      style={s.actionBtn}
-                      onPress={() =>
-                        navigation.navigate("CounsellorChat", {
-                          appointmentId: c.appointmentId,
-                          userName: c.name,
-                        })
-                      }
-                    >
-                      <Ionicons name="chatbubble-ellipses-outline" size={18} color="#111" />
-                      <Text style={s.actionTxt}>Chat</Text>
-                    </TouchableOpacity>
-                  )}
+                          <TextInput value={reviewDrafts[client.appointmentId]?.comment || ""} onChangeText={text => updateReviewDraft(client.appointmentId, {
+                comment: text
+              })} placeholder={translate("Write a short review")} placeholderTextColor={theme.muted} multiline style={styles.reviewInput} />
 
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    style={s.actionBtn}
-                    onPress={() => Alert.alert("Client Profile", "Hook this to a client details page later.")}
-                  >
-                    <Ionicons name="person-outline" size={18} color="#111" />
-                    <Text style={s.actionTxt}>Profile</Text>
-                  </TouchableOpacity>
-                </View>
+                          <TouchableOpacity style={[styles.submitReviewButton, submittingReviewId === client.appointmentId && styles.submitReviewButtonBusy]} onPress={() => onSubmitReview(client.appointmentId)} disabled={submittingReviewId === client.appointmentId} activeOpacity={0.9}>
+                            <Text style={styles.submitReviewButtonText}>
+                              {submittingReviewId === client.appointmentId ? "Submitting..." : "Submit Review"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View> : null}
+                    </>}
+                </View> : null}
+
+              <View style={styles.actionsRow}>
+                {canChat(client) ? <TouchableOpacity style={styles.chatButton} onPress={() => navigation.navigate("CounsellorChat", {
+            appointmentId: client.appointmentId,
+            userName: client.name,
+            userPhone: String(client.phone || "")
+          })} activeOpacity={0.9}>
+                    <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.chatButtonText}>{translate("Open Chat")}</Text>
+                  </TouchableOpacity> : <View style={styles.helperPill}>
+                    <Text style={styles.helperPillText}>{translate("Chat unlocks for confirmed online sessions")}</Text>
+                  </View>}
               </View>
-            ))}
-
-            {filtered.length === 0 && (
-              <View style={[s.card, { justifyContent: "center" }]}>
-                <Text style={s.emptyTitle}>No booked clients found</Text>
-                <Text style={s.emptySub}>If users haven’t booked yet, this list stays empty. Try refresh.</Text>
-              </View>
-            )}
-          </ScrollView>
-        )}
-      </View>
-
-      {/* Bottom nav */}
-      <View style={s.bottomWrap}>
-        <View style={s.bottomPill}>
-          <TouchableOpacity activeOpacity={0.85} style={s.pillBtn} onPress={() => console.log("Stats later")}>
-            <Feather name="bar-chart-2" size={22} color="#111" />
-          </TouchableOpacity>
-
-          <TouchableOpacity activeOpacity={0.85} style={[s.pillBtn, s.pillBtnActive]} onPress={goHome}>
-            <Feather name="home" size={22} color="#111" />
-          </TouchableOpacity>
-
-          <TouchableOpacity activeOpacity={0.85} style={s.pillBtn} onPress={() => console.log("Add later")}>
-            <Feather name="user-plus" size={22} color="#111" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
+            </View>)}
+      </ScrollView>
+    </SafeAreaView>;
 }
-
-const shadow = {
-  shadowColor: "#000",
-  shadowOpacity: 0.12,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 6 },
-  elevation: 5,
-};
-
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: BG },
-
-  headerCard: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    ...shadow,
-  },
-
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-
-  backBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#EFEFEF",
-  },
-
-  refreshBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#EFEFEF",
-  },
-
-  title: { fontSize: 24, fontWeight: "900" },
-  titleAccent: { color: ORANGE, fontWeight: "900" },
-  titleMain: { color: "#111", fontWeight: "900" },
-
-  searchRow: { flexDirection: "row" },
-  searchBar: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#F2F2F2",
-    borderWidth: 1,
-    borderColor: "#E3E3E3",
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: "#111",
-    paddingVertical: 0,
-  },
-  clearBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#ECECEC",
-  },
-
-  miniHint: { marginTop: 10, fontSize: 12, color: "#777", fontWeight: "700" },
-
-  bodyWrap: { flex: 1, paddingTop: 18 },
-
-  loadingBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  loadingTxt: { fontSize: 13, fontWeight: "800", color: "#666" },
-
-  hScrollContent: { paddingHorizontal: 18, paddingBottom: 140 },
-
-  card: {
-    width: SCREEN_W * 0.82,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 26,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    marginRight: 18,
-    ...shadow,
-  },
-
-  topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#D9D9D9",
-  },
-
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1.5,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  dot: { width: 9, height: 9, borderRadius: 99 },
-  statusTxt: { fontSize: 11, fontWeight: "900" },
-
-  name: { marginTop: 12, fontSize: 20, fontWeight: "900", color: "#111" },
-  ratingMeta: { marginTop: 6, fontSize: 12, color: ORANGE, fontWeight: "800" },
-
-  rowLine: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  rowText: { fontSize: 13, color: ORANGE, fontWeight: "800", flex: 1 },
-
-  descBox: {
-    width: "100%",
-    marginTop: 16,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#EDEDED",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    ...shadow,
-  },
-
-  descTitle: { fontSize: 12, fontWeight: "900", color: "#111", marginBottom: 6 },
-  descText: { fontSize: 13, color: "#777", fontWeight: "700", lineHeight: 18 },
-  reviewBox: {
-    width: "100%",
-    marginTop: 14,
-    borderRadius: 16,
-    backgroundColor: "#FFF7F0",
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  reviewHeading: { fontSize: 12, fontWeight: "900", color: "#111" },
-  reviewToggleBtn: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  reviewToggleTxt: { color: ORANGE, fontSize: 12, fontWeight: "900" },
-  reviewForm: { marginTop: 12 },
-  starsRow: { flexDirection: "row", gap: 10 },
-  starBtn: { fontSize: 30, color: "#C9C9C9" },
-  starBtnActive: { color: ORANGE },
-  reviewInput: {
-    marginTop: 12,
-    minHeight: 88,
-    borderRadius: 14,
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: "#111",
-    textAlignVertical: "top",
-  },
-  reviewSubmitBtn: {
-    marginTop: 12,
-    alignSelf: "flex-start",
-    backgroundColor: ORANGE,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  reviewSubmitTxt: { color: "#fff", fontWeight: "900", fontSize: 12 },
-  reviewSavedStars: { marginTop: 8, fontSize: 18, color: ORANGE },
-  reviewSavedText: { marginTop: 8, fontSize: 12, lineHeight: 18, color: "#555", fontWeight: "700" },
-
-  actionsRow: { marginTop: 14, flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#F2F2F2",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "#E3E3E3",
-  },
-  actionTxt: { fontSize: 12, fontWeight: "900", color: "#111" },
-
-  emptyTitle: { fontSize: 18, fontWeight: "900", color: "#111", marginBottom: 6 },
-  emptySub: { fontSize: 13, color: "#777", fontWeight: "700" },
-
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    top: "60%",
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
-  },
-
-  bottomWrap: { position: "absolute", left: 0, right: 0, bottom: 18, alignItems: "center" },
-
-  bottomPill: {
-    width: "78%",
-    height: 58,
-    borderRadius: 30,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    ...shadow,
-  },
-
-  pillBtn: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  pillBtnActive: { backgroundColor: "#F2F2F2" },
-});
+function MetricCard({
+  label,
+  value,
+  styles
+}) {
+  return <View style={styles.metricCard}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>;
+}
+function MetaTile({
+  icon,
+  label,
+  value,
+  styles,
+  theme
+}) {
+  return <View style={styles.metaTile}>
+      <Feather name={icon} size={14} color={theme.accentStrong} />
+      <Text style={styles.metaTileLabel}>{label}</Text>
+      <Text style={styles.metaTileValue}>{value}</Text>
+    </View>;
+}
+function StatusBadge({
+  status,
+  styles
+}) {
+  const palette = {
+    pending: {
+      bg: "#FFF4E3",
+      fg: "#B56A00"
+    },
+    confirmed: {
+      bg: "#EAF7EE",
+      fg: "#197A3A"
+    },
+    completed: {
+      bg: "#EAF7EE",
+      fg: "#197A3A"
+    },
+    cancelled: {
+      bg: "#FDECEC",
+      fg: "#B42318"
+    }
+  };
+  const selected = palette[status] || {
+    bg: "#F2F2F2",
+    fg: "#666666"
+  };
+  return <View style={[styles.statusBadge, {
+    backgroundColor: selected.bg
+  }]}>
+      <Text style={[styles.statusBadgeText, {
+      color: selected.fg
+    }]}>
+        {status[0].toUpperCase() + status.slice(1)}
+      </Text>
+    </View>;
+}
+function createStyles(theme, isDark) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: theme.background
+    },
+    content: {
+      padding: 12,
+      paddingBottom: 32
+    },
+    hero: {
+      position: "relative",
+      overflow: "hidden",
+      backgroundColor: theme.surface,
+      borderRadius: 32,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 22,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.24 : 0.08,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 10
+      },
+      elevation: 4
+    },
+    heroGlow: {
+      position: "absolute",
+      top: -86,
+      right: -60,
+      width: 220,
+      height: 220,
+      borderRadius: 110,
+      backgroundColor: theme.accentSoft
+    },
+    topBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 18,
+      gap: 12
+    },
+    backRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10
+    },
+    backIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.surfaceSoft,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    backText: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: "700"
+    },
+    settingsButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.surfaceSoft,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    eyebrow: {
+      color: theme.accentStrong,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 1,
+      textTransform: "uppercase"
+    },
+    title: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: "800",
+      letterSpacing: -0.6,
+      maxWidth: 560
+    },
+    subtitle: {
+      marginTop: 10,
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 19,
+      maxWidth: 540
+    },
+    statsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 18,
+      flexWrap: "wrap"
+    },
+    metricCard: {
+      flex: 1,
+      minWidth: 92,
+      backgroundColor: theme.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 20,
+      padding: 14
+    },
+    metricValue: {
+      color: theme.text,
+      fontSize: 17,
+      fontWeight: "800"
+    },
+    metricLabel: {
+      marginTop: 4,
+      color: theme.muted,
+      fontSize: 10,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.8
+    },
+    searchCard: {
+      backgroundColor: theme.surface,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 16,
+      marginBottom: 16
+    },
+    searchRow: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceSoft,
+      paddingHorizontal: 14
+    },
+    searchInput: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 13,
+      paddingVertical: 12
+    },
+    loadingBox: {
+      padding: 30,
+      alignItems: "center"
+    },
+    loadingText: {
+      marginTop: 10,
+      color: theme.muted,
+      fontSize: 12,
+      fontWeight: "700"
+    },
+    emptyCard: {
+      backgroundColor: theme.surface,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 20
+    },
+    emptyTitle: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: "800"
+    },
+    emptyText: {
+      marginTop: 6,
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 18,
+      marginBottom: 12
+    },
+    cardTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12
+    },
+    avatar: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: theme.accentSoft,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    cardCopy: {
+      flex: 1
+    },
+    clientName: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: "800"
+    },
+    clientMeta: {
+      marginTop: 4,
+      color: theme.accentStrong,
+      fontSize: 11,
+      fontWeight: "800"
+    },
+    statusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999
+    },
+    statusBadgeText: {
+      fontSize: 11,
+      fontWeight: "800"
+    },
+    metaGrid: {
+      flexDirection: "row",
+      gap: 10,
+      flexWrap: "wrap",
+      marginTop: 14
+    },
+    metaTile: {
+      minWidth: "47%",
+      flexGrow: 1,
+      backgroundColor: theme.surfaceSoft,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 13
+    },
+    metaTileLabel: {
+      marginTop: 8,
+      color: theme.muted,
+      fontSize: 10,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.8
+    },
+    metaTileValue: {
+      marginTop: 6,
+      color: theme.text,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: "700"
+    },
+    notesCard: {
+      marginTop: 14,
+      backgroundColor: theme.surfaceSoft,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 14
+    },
+    notesLabel: {
+      color: theme.muted,
+      fontSize: 10,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.8
+    },
+    notesText: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    reviewCard: {
+      marginTop: 14,
+      backgroundColor: theme.accentSoft,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 14
+    },
+    reviewTitle: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "800"
+    },
+    reviewStars: {
+      marginTop: 8,
+      color: theme.accentStrong,
+      fontSize: 18,
+      fontWeight: "800"
+    },
+    reviewText: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    reviewToggle: {
+      marginTop: 10,
+      alignSelf: "flex-start",
+      backgroundColor: theme.surface,
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: theme.border
+    },
+    reviewToggleText: {
+      color: theme.accentStrong,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    reviewForm: {
+      marginTop: 12
+    },
+    starsRow: {
+      flexDirection: "row",
+      gap: 10
+    },
+    starButton: {
+      fontSize: 28,
+      color: "#C9C9C9"
+    },
+    starButtonActive: {
+      color: theme.accentStrong
+    },
+    reviewInput: {
+      marginTop: 12,
+      minHeight: 88,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.text,
+      textAlignVertical: "top",
+      fontSize: 12
+    },
+    submitReviewButton: {
+      marginTop: 12,
+      alignSelf: "flex-start",
+      backgroundColor: theme.accentStrong,
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      paddingVertical: 10
+    },
+    submitReviewButtonBusy: {
+      opacity: 0.75
+    },
+    submitReviewButtonText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    actionsRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 16,
+      flexWrap: "wrap",
+      alignItems: "center"
+    },
+    chatButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      backgroundColor: theme.accentStrong,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      borderRadius: 999
+    },
+    chatButtonText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    helperPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 999,
+      backgroundColor: theme.surfaceSoft,
+      borderWidth: 1,
+      borderColor: theme.border
+    },
+    helperPillText: {
+      color: theme.muted,
+      fontSize: 11,
+      fontWeight: "700"
+    }
+  };
+}

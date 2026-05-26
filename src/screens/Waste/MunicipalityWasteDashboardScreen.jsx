@@ -1,33 +1,18 @@
-// src/screens/Municipality/MunicipalityHomeScreen.jsx
-// ✅ Municipality UI like Police (Assign + Resolve only)
-// - No editor, no text update
-// - Uses backend:
-//    GET   /api/municipality/reports?mode=all|assigned&status=All|Open|Assigned|Resolved&category=All|Waste|Road&q=...
-//    PATCH /api/municipality/reports/:id   body: { take:true } OR { status:"Resolved" }
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
-  Linking,
-} from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
+import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, RefreshControl } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import { openCoordinatesInMaps } from "../../utils/maps";
+import { useTranslate } from "../../utils/localization";
 
 const BASE_URL = "http://10.0.2.2:5000";
 
-/* -------------------- API Helpers -------------------- */
 async function muniGET(path, token) {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Request failed");
@@ -39,16 +24,15 @@ async function muniPATCH(path, token, body) {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${token}`
     },
-    body: JSON.stringify(body || {}),
+    body: JSON.stringify(body || {})
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || "Update failed");
   return data;
 }
 
-/* -------------------- UI Helpers -------------------- */
 function timeAgo(dateLike) {
   if (!dateLike) return "just now";
   const t = new Date(dateLike).getTime();
@@ -64,472 +48,730 @@ function timeAgo(dateLike) {
   return `${d}d ago`;
 }
 
-export default function MunicipalityHomeScreen({ navigation }) {
-  const UI = useMemo(
-    () => ({
-      bg: "#0B0F14",
-      card: "#111826",
-      card2: "#0F172A",
-      text: "#EAF0FF",
-      mut: "rgba(234,240,255,0.68)",
-      line: "rgba(255,255,255,0.08)",
-      accent: "#7C3AED", // municipality purple
-      ok: "#22C55E",
-      warn: "#F59E0B",
-      danger: "#EF4444",
-    }),
-    []
-  );
+function extractCoordinates(report) {
+  if (Number.isFinite(report?.geoLocation?.latitude) && Number.isFinite(report?.geoLocation?.longitude)) {
+    return {
+      latitude: report.geoLocation.latitude,
+      longitude: report.geoLocation.longitude
+    };
+  }
+  const match = String(report?.area || "").match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return {
+    latitude,
+    longitude
+  };
+}
 
+function getCategoryKey(typeText) {
+  const type = String(typeText || "").toLowerCase();
+  if (/road|pothole|street\s*light|traffic\s*light|lighting/.test(type)) return "road";
+  if (/waste|garbage|trash|litter|drain|drainage|sewage/.test(type)) return "waste";
+  return "civic";
+}
+
+function getCategoryLabel(typeText) {
+  const key = getCategoryKey(typeText);
+  if (key === "road") return "Road";
+  if (key === "waste") return "Waste";
+  return "Civic";
+}
+
+export default function MunicipalityHomeScreen({
+  navigation
+}) {
+  const translate = useTranslate();
+  const UI = useMemo(() => ({
+    bg: "#F6F3EE",
+    card: "#FFFFFF",
+    card2: "#FFF7EF",
+    text: "#111111",
+    mut: "#6F6257",
+    softText: "#9B8A7B",
+    line: "#EADBCB",
+    accent: "#FF7A1A",
+    accent2: "#D97706",
+    accentSoft: "#FFE0C2",
+    success: "#16A34A",
+    successSoft: "#ECFDF3",
+    successBorder: "#A7F3D0",
+    warn: "#F59E0B",
+    danger: "#EF4444",
+    white: "#FFFFFF"
+  }), []);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All"); // All/Open/Assigned/Resolved
-  const [mode, setMode] = useState("all"); // all/assigned
-  const [category, setCategory] = useState("All"); // All/Waste/Road
-
+  const [status, setStatus] = useState("All");
+  const [mode, setMode] = useState("all");
+  const [category, setCategory] = useState("All");
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const [officerName, setOfficerName] = useState("Municipality Officer");
   const [officerEmail, setOfficerEmail] = useState("");
-
   const debounceRef = useRef(null);
   const didMountRef = useRef(false);
 
   const counts = useMemo(() => {
-    const open = reports.filter((r) => r.status === "Open").length;
-    const assigned = reports.filter((r) => r.status === "Assigned").length;
-    const resolved = reports.filter((r) => r.status === "Resolved").length;
-    return { open, assigned, resolved };
+    const open = reports.filter(r => r.status === "Open").length;
+    const assigned = reports.filter(r => r.status === "Assigned").length;
+    const resolved = reports.filter(r => r.status === "Resolved").length;
+    return {
+      total: reports.length,
+      open,
+      assigned,
+      resolved
+    };
   }, [reports]);
 
-  const statusTone = (st) => (st === "Resolved" ? UI.ok : st === "Assigned" ? UI.accent : UI.danger);
+  const statusTone = currentStatus => {
+    if (currentStatus === "Resolved") return UI.success;
+    if (currentStatus === "Assigned") return UI.accent2;
+    return UI.danger;
+  };
 
-  const categoryTagTone = (typeText) => {
-    const t = String(typeText || "").toLowerCase();
-    const isRoad = /road|pothole|street\s*light|traffic\s*light/i.test(t);
-    const isWaste = /waste|garbage|trash|litter|drain|drainage|sewage/i.test(t);
-    if (isRoad) return UI.warn;
-    if (isWaste) return UI.accent;
-    return UI.ok;
+  const categoryTone = typeText => {
+    const key = getCategoryKey(typeText);
+    if (key === "road") return UI.warn;
+    if (key === "waste") return UI.accent;
+    return UI.success;
   };
 
   const getToken = async () => AsyncStorage.getItem("token");
 
-  const openInMaps = async (geoLocation) => {
+  const openInMaps = async report => {
     try {
-      if (
-        !Number.isFinite(geoLocation?.latitude) ||
-        !Number.isFinite(geoLocation?.longitude)
-      ) {
-        return Alert.alert("Location unavailable", "This complaint does not have pinned coordinates.");
+      const coords = extractCoordinates(report);
+      if (!coords) {
+        return Alert.alert(translate("Location unavailable"), translate("This complaint does not have pinned coordinates."));
       }
-
-      const url = `https://www.google.com/maps/search/?api=1&query=${geoLocation.latitude},${geoLocation.longitude}`;
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        return Alert.alert("Maps unavailable", "No maps app or browser is available on this device.");
-      }
-
-      await Linking.openURL(url);
-    } catch (e) {
-      Alert.alert("Maps error", e?.message || "Could not open the pinned location.");
+      await openCoordinatesInMaps({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        label: translate("Municipality report location")
+      });
+    } catch (error) {
+      Alert.alert(translate("Maps error"), error?.message || "Could not open the pinned location.");
     }
+  };
+
+  const showReportDetails = report => {
+    const coords = extractCoordinates(report);
+    const details = [`Report: ${report.id}`, `Type: ${report.type}`, `Category: ${getCategoryLabel(report.type)}`, `Priority: ${report.priority}`, `Status: ${report.status}`, `Area: ${report.area || "Unknown area"}`, `Updated: ${report.time || "just now"}`, report.assignedOfficer ? `Assigned To: ${report.assignedOfficer}` : "Assigned To: Unassigned", report.description ? `Description: ${report.description}` : "Description: No description provided"];
+    if (coords) {
+      details.push(`Pinned Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`);
+    }
+    Alert.alert(translate("Complaint Details"), details.join("\n\n"), coords ? [{
+      text: translate("Close"),
+      style: "cancel"
+    }, {
+      text: translate("Open in Maps"),
+      onPress: () => openInMaps(report)
+    }] : [{
+      text: translate("Close"),
+      style: "cancel"
+    }]);
   };
 
   const loadOfficer = async () => {
     try {
       const raw = await AsyncStorage.getItem("user");
       if (!raw) return;
-      const u = JSON.parse(raw);
-      if (u?.fullName) setOfficerName(u.fullName);
-      if (u?.email) setOfficerEmail(u.email);
-    } catch {
-      // ignore
-    }
+      const user = JSON.parse(raw);
+      if (user?.fullName) setOfficerName(user.fullName);
+      if (user?.email) setOfficerEmail(user.email);
+    } catch {}
   };
 
-  const apiGetReports = async ({ token }) => {
+  const apiGetReports = async ({
+    token
+  }) => {
     const params = new URLSearchParams();
     params.append("mode", mode);
     params.append("status", status);
     params.append("category", category);
     if (query.trim()) params.append("q", query.trim());
-
-    const data = await muniGET(`/api/municipality/reports?${params.toString()}`, token);
-    return data;
+    return muniGET(`/api/municipality/reports?${params.toString()}`, token);
   };
 
-  const normalize = (list) =>
-    (Array.isArray(list) ? list : []).map((r) => ({
-      ...r,
-      id: r.reportCode || r.id || r._id,
-      time: r.time || timeAgo(r.createdAt),
-      type: r.type || "Complaint",
-      area: r.area || "Unknown area",
-      description: r.description || "",
-      status: r.status || "Open",
-      priority: r.priority || "Medium",
-    }));
+  const normalize = list => (Array.isArray(list) ? list : []).map(report => ({
+    ...report,
+    id: report.reportCode || report.id || report._id,
+    time: report.time || timeAgo(report.createdAt),
+    type: report.type || "Complaint",
+    area: report.area || "Unknown area",
+    description: report.description || "",
+    status: report.status || "Open",
+    priority: report.priority || "Medium",
+    assignedOfficer: report.assignedTo?.fullName || "",
+    geoLocation: report.geoLocation || null
+  })).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
-  const loadAll = useCallback(
-    async ({ showSpinner = false } = {}) => {
-      try {
-        if (showSpinner) setLoading(true);
-
-        const token = await getToken();
-        if (!token) {
-          setLoading(false);
-          setRefreshing(false);
-          Alert.alert("Login required", "Token not found. Please login again.");
-          return;
-        }
-
-        const res = await apiGetReports({ token });
-        const list = normalize(res?.reports);
-        setReports(list);
-      } catch (e) {
-        Alert.alert("Municipality", e?.message || "Failed to load complaints");
-        setReports([]);
-      } finally {
+  const loadAll = useCallback(async ({
+    showSpinner = false
+  } = {}) => {
+    try {
+      if (showSpinner) setLoading(true);
+      const token = await getToken();
+      if (!token) {
         setLoading(false);
         setRefreshing(false);
+        Alert.alert(translate("Login required"), translate("Token not found. Please login again."));
+        return;
       }
-    },
-    [mode, status, category, query]
-  );
+      const res = await apiGetReports({
+        token
+      });
+      setReports(normalize(res?.reports));
+    } catch (error) {
+      Alert.alert(translate("Municipality"), error?.message || "Failed to load complaints");
+      setReports([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [mode, status, category, query]);
 
   useEffect(() => {
     loadOfficer();
-    loadAll({ showSpinner: true });
+    loadAll({
+      showSpinner: true
+    });
     didMountRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // debounce query (like police)
   useEffect(() => {
     if (!didMountRef.current) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => loadAll({ showSpinner: false }), 450);
-
+    debounceRef.current = setTimeout(() => {
+      loadAll({
+        showSpinner: false
+      });
+    }, 450);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, loadAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
-  // immediate load on filter change
   useEffect(() => {
     if (!didMountRef.current) return;
-    loadAll({ showSpinner: false });
-  }, [mode, status, category, loadAll]);
+    loadAll({
+      showSpinner: false
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, status, category]);
+
+  useFocusEffect(useCallback(() => {
+    loadAll({
+      showSpinner: false
+    });
+  }, [loadAll]));
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadAll({ showSpinner: false });
+    await loadAll({
+      showSpinner: false
+    });
   };
 
-  const onAssignToMe = (r) => {
-    Alert.alert("Assign", `Assign ${r.id} to you?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Assign",
-        onPress: async () => {
-          try {
-            const token = await getToken();
-            if (!token) return Alert.alert("Login required", "Token missing.");
-
-            // ✅ municipality uses take:true (your controller supports this)
-            await muniPATCH(`/api/municipality/reports/${r._id}`, token, { take: true });
-
-            await loadAll({ showSpinner: false });
-          } catch (e) {
-            Alert.alert("Error", e?.message || "Failed to assign complaint");
-          }
-        },
-      },
-    ]);
+  const onAssignToMe = report => {
+    Alert.alert(translate("Assign"), `Assign ${report.id} to you?`, [{
+      text: translate("Cancel"),
+      style: "cancel"
+    }, {
+      text: translate("Assign"),
+      onPress: async () => {
+        try {
+          const token = await getToken();
+          if (!token) return Alert.alert(translate("Login required"), translate("Token missing."));
+          await muniPATCH(`/api/municipality/reports/${report._id}`, token, {
+            take: true
+          });
+          loadAll({
+            showSpinner: false
+          });
+        } catch (error) {
+          Alert.alert(translate("Error"), error?.message || "Failed to assign complaint");
+        }
+      }
+    }]);
   };
 
-  const onResolve = (r) => {
-    Alert.alert("Resolve", `Mark ${r.id} as resolved?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Resolve",
-        onPress: async () => {
-          try {
-            const token = await getToken();
-            if (!token) return Alert.alert("Login required", "Token missing.");
-
-            // ✅ resolve (controller requires assignedTo = you)
-            await muniPATCH(`/api/municipality/reports/${r._id}`, token, { status: "Resolved" });
-
-            await loadAll({ showSpinner: false });
-          } catch (e) {
-            Alert.alert("Error", e?.message || "Failed to resolve complaint");
-          }
-        },
-      },
-    ]);
+  const onResolve = report => {
+    Alert.alert(translate("Resolve"), `Mark ${report.id} as resolved?`, [{
+      text: translate("Cancel"),
+      style: "cancel"
+    }, {
+      text: translate("Resolve"),
+      onPress: async () => {
+        try {
+          const token = await getToken();
+          if (!token) return Alert.alert(translate("Login required"), translate("Token missing."));
+          await muniPATCH(`/api/municipality/reports/${report._id}`, token, {
+            status: "Resolved"
+          });
+          loadAll({
+            showSpinner: false
+          });
+        } catch (error) {
+          Alert.alert(translate("Error"), error?.message || "Failed to resolve complaint");
+        }
+      }
+    }]);
   };
 
   const logout = async () => {
-    Alert.alert("Logout?", "You will be returned to the login screen.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await AsyncStorage.removeItem("token");
-          await AsyncStorage.removeItem("user");
-          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
-        },
-      },
-    ]);
+    Alert.alert(translate("Logout?"), translate("You will be returned to the login screen."), [{
+      text: translate("Cancel"),
+      style: "cancel"
+    }, {
+      text: translate("Logout"),
+      style: "destructive",
+      onPress: async () => {
+        await AsyncStorage.removeItem("token");
+        await AsyncStorage.removeItem("user");
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: "Login"
+          }]
+        });
+      }
+    }]);
   };
 
-  return (
-    <SafeAreaView style={[s.safe, { backgroundColor: UI.bg }]}>
-      <ScrollView
-        contentContainerStyle={s.page}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={UI.text} />}
-      >
-        {/* Header */}
-        <View style={s.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={[s.title, { color: UI.text }]}>
-              Municipality <Text style={{ color: UI.accent, fontWeight: "900" }}>Desk</Text>
-            </Text>
-            <Text style={[s.sub, { color: UI.mut }]} numberOfLines={1}>
-              Officer: <Text style={{ color: UI.text, fontWeight: "900" }}>{officerName}</Text>
-              {officerEmail ? ` • ${officerEmail}` : ""}
-            </Text>
-          </View>
-
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <TouchableOpacity activeOpacity={0.9} style={[s.roundBtn, { borderColor: UI.line }]} onPress={() => loadAll({ showSpinner: true })}>
-              <Ionicons name="refresh-outline" size={20} color={UI.text} />
-            </TouchableOpacity>
-
-            <TouchableOpacity activeOpacity={0.9} style={[s.roundBtn, { borderColor: UI.line }]} onPress={logout}>
-              <Ionicons name="log-out-outline" size={20} color={UI.danger} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Stats row like police */}
-        <View style={s.statsRow}>
-          <StatPill label="Open" value={counts.open} color={UI.danger} UI={UI} />
-          <StatPill label="Assigned" value={counts.assigned} color={UI.accent} UI={UI} />
-          <StatPill label="Resolved" value={counts.resolved} color={UI.ok} UI={UI} />
-        </View>
-
-        {/* Search */}
-        <View style={[s.searchBox, { borderColor: UI.line, backgroundColor: UI.card }]}>
-          <Ionicons name="search-outline" size={18} color={UI.mut} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search type, area, status..."
-            placeholderTextColor="rgba(234,240,255,0.45)"
-            style={[s.searchInput, { color: UI.text }]}
-          />
-          {!!query && (
-            <TouchableOpacity onPress={() => setQuery("")} style={s.clearBtn}>
-              <Ionicons name="close-circle" size={20} color={UI.mut} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Filters */}
-        <View style={[s.panel, { borderColor: UI.line, backgroundColor: UI.card }]}>
-          <Text style={[s.panelTitle, { color: UI.text }]}>Filters</Text>
-
-          <Text style={[s.lbl, { color: UI.mut }]}>Mode</Text>
-          <View style={s.chips}>
-            {[
-              { k: "assigned", t: "My Assigned" },
-              { k: "all", t: "All Complaints" },
-            ].map((x) => {
-              const active = mode === x.k;
-              return (
-                <TouchableOpacity
-                  key={x.k}
-                  activeOpacity={0.9}
-                  onPress={() => setMode(x.k)}
-                  style={[s.chip, { borderColor: UI.line, backgroundColor: active ? UI.card2 : UI.card }]}
-                >
-                  <Text style={{ color: active ? UI.text : UI.mut, fontWeight: "900", fontSize: 12 }}>{x.t}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={[s.lbl, { color: UI.mut }]}>Category</Text>
-          <View style={s.chips}>
-            {["All", "Waste", "Road"].map((c) => {
-              const active = category === c;
-              return (
-                <TouchableOpacity
-                  key={c}
-                  activeOpacity={0.9}
-                  onPress={() => setCategory(c)}
-                  style={[s.chip, { borderColor: UI.line, backgroundColor: active ? UI.card2 : UI.card }]}
-                >
-                  <Text style={{ color: active ? UI.text : UI.mut, fontWeight: "900", fontSize: 12 }}>{c}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={[s.lbl, { color: UI.mut }]}>Status</Text>
-          <View style={s.chips}>
-            {["All", "Open", "Assigned", "Resolved"].map((st) => {
-              const active = status === st;
-              return (
-                <TouchableOpacity
-                  key={st}
-                  activeOpacity={0.9}
-                  onPress={() => setStatus(st)}
-                  style={[s.chip, { borderColor: UI.line, backgroundColor: active ? UI.card2 : UI.card }]}
-                >
-                  <Text style={{ color: active ? UI.text : UI.mut, fontWeight: "900", fontSize: 12 }}>{st}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* List section like police */}
-        <View style={[s.section, { borderColor: UI.line, backgroundColor: UI.card }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={[s.sectionTitle, { color: UI.text }]}>Complaints Queue</Text>
-
-            {loading ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <ActivityIndicator size="small" color={UI.text} />
-                <Text style={{ color: UI.mut, fontSize: 12, fontWeight: "800" }}>Loading…</Text>
-              </View>
-            ) : null}
-          </View>
-
-          {!loading && reports.length === 0 ? (
-            <View style={[s.empty, { borderColor: UI.line }]}>
-              <Ionicons name="alert-circle-outline" size={20} color={UI.warn} />
-              <Text style={[s.emptyTxt, { color: UI.mut }]}>No complaints found.</Text>
+  return <SafeAreaView style={[styles.safe, {
+    backgroundColor: UI.bg
+  }]}>
+      <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={UI.text} />}>
+        <View style={[styles.hero, {
+        borderColor: UI.line,
+        backgroundColor: UI.card
+      }]}>
+          <View style={[styles.heroGlow, {
+          backgroundColor: UI.card2
+        }]} />
+          <View style={styles.header}>
+            <View style={styles.headerCopy}>
+              <Text style={[styles.title, {
+              color: UI.text
+            }]}>{translate("Municipality")}<Text style={[styles.titleAccent, {
+                color: UI.accent
+              }]}>{translate("Desk")}</Text>
+              </Text>
+              <Text style={[styles.sub, {
+              color: UI.mut
+            }]}>{translate("Coordinate waste and road complaints, assign field work, and close issues with a clearer queue.")}</Text>
+              <Text style={[styles.officerLine, {
+              color: UI.softText
+            }]}>{translate("Officer:")} <Text style={[styles.officerValue, {
+                  color: UI.text
+                }]}>{officerName}</Text>{officerEmail ? ` | ${officerEmail}` : ""}
+              </Text>
             </View>
-          ) : null}
 
-          {reports.map((r) => {
-            const stTone = statusTone(r.status);
-            const catTone = categoryTagTone(r.type);
+            <View style={styles.headerActions}>
+              <TouchableOpacity activeOpacity={0.9} style={[styles.quickBtn, {
+              backgroundColor: UI.accent
+            }]} onPress={() => loadAll({
+              showSpinner: true
+            })}>
+                <Ionicons name="refresh-outline" size={16} color="#fff" />
+                <Text style={styles.quickBtnTxt}>{translate("Refresh")}</Text>
+              </TouchableOpacity>
 
-            return (
-              <View key={r._id} style={[s.reportCard, { borderColor: UI.line, backgroundColor: UI.card2 }]}>
-                <View style={s.reportTop}>
-                  <Text style={[s.reportId, { color: UI.text }]}>{r.id}</Text>
+              <TouchableOpacity activeOpacity={0.9} style={[styles.roundBtn, {
+              borderColor: UI.line
+            }]} onPress={logout}>
+                <Ionicons name="log-out-outline" size={20} color={UI.danger} />
+              </TouchableOpacity>
+            </View>
+          </View>
 
-                  <View style={[s.badge, { borderColor: UI.line, backgroundColor: "rgba(0,0,0,0.15)" }]}>
-                    <View style={[s.dot, { backgroundColor: catTone }]} />
-                    <Text style={[s.badgeTxt, { color: UI.text }]} numberOfLines={1}>
-                      {r.type}
-                    </Text>
-                  </View>
-                </View>
-
-                {!!r.description && (
-                  <Text style={{ color: UI.mut, marginTop: 8, fontSize: 12, fontWeight: "700" }} numberOfLines={2}>
-                    {r.description}
-                  </Text>
-                )}
-
-                <View style={s.metaRow}>
-                  <Ionicons name="location-outline" size={14} color={UI.mut} />
-                  <Text style={[s.metaTxt, { color: UI.mut }]}>{r.area}</Text>
-                  <Text style={[s.metaDot, { color: UI.mut }]}>•</Text>
-                  <Ionicons name="time-outline" size={14} color={UI.mut} />
-                  <Text style={[s.metaTxt, { color: UI.mut }]}>{r.time || "just now"}</Text>
-                </View>
-
-                {Number.isFinite(r?.geoLocation?.latitude) && Number.isFinite(r?.geoLocation?.longitude) ? (
-                  <View style={s.coordRow}>
-                    <Text style={[s.coordTxt, { color: UI.mut }]}>
-                      Pin: {r.geoLocation.latitude.toFixed(6)}, {r.geoLocation.longitude.toFixed(6)}
-                    </Text>
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      onPress={() => openInMaps(r.geoLocation)}
-                      style={[s.mapBtn, { borderColor: UI.line }]}
-                    >
-                      <Ionicons name="navigate-outline" size={14} color={UI.text} />
-                      <Text style={[s.mapBtnTxt, { color: UI.text }]}>Open in Maps</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                <View style={s.actionsRow}>
-                  <View style={[s.statusPill, { borderColor: UI.line }]}>
-                    <View style={[s.dot, { backgroundColor: stTone }]} />
-                    <Text style={[s.statusTxt, { color: UI.text }]}>{r.status}</Text>
-                  </View>
-
-                  {/* ✅ Assign button only if unassigned/open */}
-                  {r.status !== "Assigned" && r.status !== "Resolved" && (
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      onPress={() => onAssignToMe(r)}
-                      style={[s.actionBtn, { borderColor: UI.line }]}
-                    >
-                      <Ionicons name="person-add-outline" size={16} color={UI.text} />
-                      <Text style={[s.actionTxt, { color: UI.text }]}>Assign</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* ✅ Resolve button (backend will block if not assigned to you) */}
-                  {r.status !== "Resolved" && (
-                    <TouchableOpacity
-                      activeOpacity={0.9}
-                      onPress={() => onResolve(r)}
-                      style={[s.actionBtn, { borderColor: UI.line }]}
-                    >
-                      <Ionicons name="checkmark-done-outline" size={16} color={UI.ok} />
-                      <Text style={[s.actionTxt, { color: UI.text }]}>Resolve</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+          <View style={styles.heroBand}>
+            <HeroChip text={translate("Assigned-only mode")} icon="person-outline" iconColor={UI.accent2} textColor={UI.text} borderColor={UI.line} backgroundColor={UI.card2} />
+            <HeroChip text={translate("Waste and road filters")} icon="funnel-outline" iconColor={UI.warn} textColor={UI.text} borderColor={UI.line} backgroundColor={UI.card2} />
+            <HeroChip text={translate("Open map pins")} icon="navigate-outline" iconColor={UI.accent} textColor={UI.text} borderColor={UI.line} backgroundColor={UI.card2} />
+            <HeroChip text={translate("Resolution queue")} icon="checkmark-done-outline" iconColor={UI.success} textColor={UI.text} borderColor={UI.successBorder} backgroundColor={UI.successSoft} />
+          </View>
         </View>
 
-        <Text style={[s.footer, { color: UI.mut }]}>Live backend: GET /api/municipality/reports ✅</Text>
+        <View style={styles.statsRow}>
+          <StatPill label={translate("Total")} value={counts.total} color={UI.accent} textColor={UI.text} mutedColor={UI.mut} borderColor={UI.line} backgroundColor={UI.card} />
+          <StatPill label={translate("Open")} value={counts.open} color={UI.danger} textColor={UI.text} mutedColor={UI.mut} borderColor={UI.line} backgroundColor={UI.card} />
+          <StatPill label={translate("Assigned")} value={counts.assigned} color={UI.accent2} textColor={UI.text} mutedColor={UI.mut} borderColor={UI.line} backgroundColor={UI.card} />
+          <StatPill label={translate("Resolved")} value={counts.resolved} color={UI.success} textColor={UI.text} mutedColor={UI.mut} borderColor={UI.line} backgroundColor={UI.card} />
+        </View>
+
+        <View style={[styles.searchBox, {
+        borderColor: UI.line,
+        backgroundColor: UI.card
+      }]}>
+          <Ionicons name="search-outline" size={18} color={UI.mut} />
+          <TextInput value={query} onChangeText={setQuery} placeholder={translate("Search type, area, status, priority...")} placeholderTextColor={UI.softText} style={[styles.searchInput, {
+          color: UI.text
+        }]} />
+          {!!query && <TouchableOpacity onPress={() => setQuery("")} style={styles.clearBtn}>
+              <Ionicons name="close-circle" size={20} color={UI.mut} />
+            </TouchableOpacity>}
+        </View>
+
+        <View style={[styles.section, {
+        borderColor: UI.line,
+        backgroundColor: UI.card
+      }]}>
+          <Text style={[styles.sectionTitle, {
+          color: UI.text
+        }]}>{translate("Filters")}</Text>
+
+          <FilterGroup label={translate("View")} value={mode} onChange={setMode} items={[{
+            key: "assigned",
+            label: translate("My Assigned")
+          }, {
+            key: "all",
+            label: translate("All Complaints")
+          }]} UI={UI} />
+
+          <FilterGroup label={translate("Category")} value={category} onChange={setCategory} items={[{
+            key: "All",
+            label: translate("All")
+          }, {
+            key: "Waste",
+            label: translate("Waste")
+          }, {
+            key: "Road",
+            label: translate("Road")
+          }]} UI={UI} />
+
+          <FilterGroup label={translate("Status")} value={status} onChange={setStatus} items={[{
+            key: "All",
+            label: translate("All")
+          }, {
+            key: "Open",
+            label: translate("Open")
+          }, {
+            key: "Assigned",
+            label: translate("Assigned")
+          }, {
+            key: "Resolved",
+            label: translate("Resolved")
+          }]} UI={UI} />
+        </View>
+
+        <View style={[styles.section, {
+        borderColor: UI.line,
+        backgroundColor: UI.card
+      }]}>
+          <View style={styles.sectionTop}>
+            <Text style={[styles.sectionTitle, {
+            color: UI.text
+          }]}>{translate("Complaints Queue")}</Text>
+
+            {loading ? <View style={styles.loadingWrap}>
+                <ActivityIndicator size="small" color={UI.text} />
+                <Text style={[styles.loadingText, {
+              color: UI.mut
+            }]}>{translate("Loading...")}</Text>
+              </View> : null}
+          </View>
+
+          {!loading && reports.length === 0 ? <View style={[styles.empty, {
+          borderColor: UI.line
+        }]}>
+              <Ionicons name="sparkles-outline" size={20} color={UI.accent} />
+              <Text style={[styles.emptyTxt, {
+            color: UI.mut
+          }]}>{translate("No complaints found.")}</Text>
+            </View> : null}
+
+          {reports.map(report => {
+          const coords = extractCoordinates(report);
+          const categoryLabel = getCategoryLabel(report.type);
+          const categoryColor = categoryTone(report.type);
+          const currentStatusColor = statusTone(report.status);
+          return <TouchableOpacity key={report._id} activeOpacity={0.92} onPress={() => showReportDetails(report)} style={[styles.reportCard, {
+            borderColor: UI.line,
+            backgroundColor: UI.card2
+          }]}>
+                <View style={styles.reportTop}>
+                  <Text style={[styles.reportId, {
+                color: UI.text
+              }]}>{report.id}</Text>
+
+                  <View style={[styles.badge, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                    <View style={[styles.dot, {
+                  backgroundColor: categoryColor
+                }]} />
+                    <Text style={[styles.badgeTxt, {
+                  color: UI.text
+                }]}>{translate(categoryLabel)}</Text>
+                  </View>
+                </View>
+
+                <Text style={[styles.reportTitle, {
+              color: UI.text
+            }]}>{report.type}</Text>
+
+                {!!report.description && <Text style={[styles.reportDescription, {
+              color: UI.mut
+            }]} numberOfLines={2}>
+                    {report.description}
+                  </Text>}
+
+                <View style={styles.metaRow}>
+                  <Ionicons name="location-outline" size={14} color={UI.mut} />
+                  <Text style={[styles.metaTxt, {
+                color: UI.mut
+              }]}>{report.area}</Text>
+                  <Text style={[styles.metaDot, {
+                color: UI.mut
+              }]}>|</Text>
+                  <Ionicons name="time-outline" size={14} color={UI.mut} />
+                  <Text style={[styles.metaTxt, {
+                color: UI.mut
+              }]}>{report.time || "just now"}</Text>
+                  {!!report.assignedOfficer && <>
+                      <Text style={[styles.metaDot, {
+                  color: UI.mut
+                }]}>|</Text>
+                      <Ionicons name="person-outline" size={14} color={UI.mut} />
+                      <Text style={[styles.metaTxt, {
+                  color: UI.mut
+                }]}>{report.assignedOfficer}</Text>
+                    </>}
+                </View>
+
+                {coords ? <View style={styles.coordRow}>
+                    <Text style={[styles.coordTxt, {
+                color: UI.mut
+              }]}>{translate("Coordinates:")} {coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}
+                    </Text>
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => openInMaps(report)} style={[styles.mapBtn, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                      <Ionicons name="navigate-outline" size={14} color={UI.text} />
+                      <Text style={[styles.mapBtnTxt, {
+                  color: UI.text
+                }]}>{translate("Open in Maps")}</Text>
+                    </TouchableOpacity>
+                  </View> : null}
+
+                <View style={styles.actionsRow}>
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => showReportDetails(report)} style={[styles.actionBtn, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                    <Ionicons name="document-text-outline" size={16} color={UI.text} />
+                    <Text style={[styles.actionTxt, {
+                  color: UI.text
+                }]}>{translate("Details")}</Text>
+                  </TouchableOpacity>
+
+                  {coords ? <TouchableOpacity activeOpacity={0.9} onPress={() => openInMaps(report)} style={[styles.actionBtn, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                      <Ionicons name="navigate-outline" size={16} color={UI.text} />
+                      <Text style={[styles.actionTxt, {
+                  color: UI.text
+                }]}>{translate("Maps")}</Text>
+                    </TouchableOpacity> : null}
+
+                  <View style={[styles.statusPill, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                    <View style={[styles.dot, {
+                  backgroundColor: currentStatusColor
+                }]} />
+                    <Text style={[styles.statusTxt, {
+                  color: UI.text
+                }]}>{report.status}</Text>
+                  </View>
+
+                  {report.status !== "Assigned" && report.status !== "Resolved" && <TouchableOpacity activeOpacity={0.9} onPress={() => onAssignToMe(report)} style={[styles.actionBtn, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                      <Ionicons name="person-add-outline" size={16} color={UI.text} />
+                      <Text style={[styles.actionTxt, {
+                  color: UI.text
+                }]}>{translate("Assign")}</Text>
+                    </TouchableOpacity>}
+
+                  {report.status !== "Resolved" && <TouchableOpacity activeOpacity={0.9} onPress={() => onResolve(report)} style={[styles.actionBtn, styles.whiteBg, {
+                borderColor: UI.line
+              }]}>
+                      <Ionicons name="checkmark-done-outline" size={16} color={UI.accent} />
+                      <Text style={[styles.actionTxt, {
+                  color: UI.text
+                }]}>{translate("Resolve")}</Text>
+                    </TouchableOpacity>}
+                </View>
+              </TouchableOpacity>;
+        })}
+        </View>
+
+        <Text style={[styles.footer, {
+        color: UI.mut
+      }]}>{translate("Live backend: GET /api/municipality/reports")}</Text>
       </ScrollView>
-    </SafeAreaView>
-  );
+    </SafeAreaView>;
 }
 
-/* -------------------- Small Component -------------------- */
-function StatPill({ label, value, color, UI }) {
-  return (
-    <View style={[s.stat, { borderColor: UI.line, backgroundColor: UI.card }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <View style={[s.dot, { backgroundColor: color }]} />
-        <Text style={{ color: UI.mut, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+function HeroChip({
+  icon,
+  iconColor,
+  text,
+  textColor,
+  borderColor,
+  backgroundColor
+}) {
+  return <View style={[styles.heroChip, {
+    borderColor,
+    backgroundColor
+  }]}>
+      <Ionicons name={icon} size={14} color={iconColor} />
+      <Text style={[styles.heroChipTxt, {
+      color: textColor
+    }]}>{text}</Text>
+    </View>;
+}
+
+function StatPill({
+  label,
+  value,
+  color,
+  textColor,
+  mutedColor,
+  borderColor,
+  backgroundColor
+}) {
+  return <View style={[styles.stat, {
+    borderColor,
+    backgroundColor
+  }]}>
+      <View style={styles.statTop}>
+        <View style={[styles.dot, {
+        backgroundColor: color
+      }]} />
+        <Text style={[styles.statLabel, {
+        color: mutedColor
+      }]}>{label}</Text>
       </View>
-      <Text style={{ color: UI.text, fontSize: 18, fontWeight: "900" }}>{value}</Text>
-    </View>
-  );
+      <Text style={[styles.statValue, {
+      color: textColor
+    }]}>{value}</Text>
+    </View>;
 }
 
-/* -------------------- Styles -------------------- */
-const s = StyleSheet.create({
-  safe: { flex: 1 },
-  page: { padding: 16, paddingBottom: 26 },
+function FilterGroup({
+  label,
+  value,
+  onChange,
+  items,
+  UI
+}) {
+  return <View style={styles.filterGroup}>
+      <Text style={[styles.filterLabel, {
+      color: UI.mut
+    }]}>{label}</Text>
+      <View style={styles.filters}>
+        {items.map(item => <TouchableOpacity key={item.key} activeOpacity={0.9} onPress={() => onChange(item.key)} style={[styles.filterChip, {
+        borderColor: UI.line,
+        backgroundColor: value === item.key ? UI.accentSoft : UI.card
+      }]}>
+            <Text style={[styles.filterChipText, {
+          color: value === item.key ? UI.accent2 : UI.mut
+        }]}>{item.label}</Text>
+          </TouchableOpacity>)}
+      </View>
+    </View>;
+}
 
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  title: { fontSize: 22, fontWeight: "900" },
-  sub: { marginTop: 4, fontSize: 13, lineHeight: 18 },
-
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1
+  },
+  page: {
+    padding: 16,
+    paddingBottom: 26
+  },
+  hero: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 14,
+    overflow: "hidden",
+    shadowColor: "#B45309",
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: {
+      width: 0,
+      height: 8
+    },
+    elevation: 3
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    top: -70,
+    right: -40,
+    opacity: 0.85
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start"
+  },
+  headerCopy: {
+    flex: 1,
+    paddingRight: 12
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "900"
+  },
+  titleAccent: {
+    fontWeight: "900"
+  },
+  sub: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18
+  },
+  officerLine: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17
+  },
+  officerValue: {
+    fontWeight: "900"
+  },
+  quickBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  quickBtnTxt: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900"
+  },
   roundBtn: {
     width: 42,
     height: 42,
@@ -537,11 +779,55 @@ const s = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#FFFFFF"
   },
-
-  statsRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  stat: { flex: 1, borderWidth: 1, borderRadius: 16, padding: 12, justifyContent: "space-between", minHeight: 74 },
-
+  heroBand: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  heroChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  heroChipTxt: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+    flexWrap: "wrap"
+  },
+  stat: {
+    flex: 1,
+    minWidth: 76,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    justifyContent: "space-between",
+    minHeight: 74
+  },
+  statTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "900"
+  },
   searchBox: {
     borderWidth: 1,
     borderRadius: 16,
@@ -550,47 +836,158 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 10
   },
-  searchInput: { flex: 1, fontSize: 13 },
-  clearBtn: { padding: 2 },
-
-  panel: { borderWidth: 1, borderRadius: 18, padding: 14, marginBottom: 12 },
-  panelTitle: { fontSize: 14, fontWeight: "900", marginBottom: 10 },
-  lbl: { fontSize: 12, fontWeight: "800", marginBottom: 6 },
-
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-
-  section: { borderWidth: 1, borderRadius: 18, padding: 14 },
-  sectionTitle: { fontSize: 14, fontWeight: "900", marginBottom: 10 },
-
-  empty: { borderWidth: 1, borderRadius: 16, padding: 14, flexDirection: "row", alignItems: "center", gap: 10 },
-  emptyTxt: { fontSize: 12, fontWeight: "700" },
-
-  reportCard: { borderWidth: 1, borderRadius: 18, padding: 12, marginBottom: 10 },
-  reportTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
-  reportId: { fontSize: 12, fontWeight: "900", opacity: 0.95, maxWidth: 120 },
-
-  badge: {
+  searchInput: {
     flex: 1,
+    fontSize: 13
+  },
+  clearBtn: {
+    padding: 2
+  },
+  section: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12
+  },
+  sectionTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    marginBottom: 10
+  },
+  filterGroup: {
+    marginTop: 2
+  },
+  filterLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 8
+  },
+  filters: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+    flexWrap: "wrap"
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  filterChipText: {
+    fontWeight: "800",
+    fontSize: 12
+  },
+  loadingWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  loadingText: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  empty: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  emptyTxt: {
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  whiteBg: {
+    backgroundColor: "#FFFFFF"
+  },
+  reportCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 3
+    },
+    elevation: 2
+  },
+  reportTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  reportId: {
+    fontSize: 12,
+    fontWeight: "900",
+    opacity: 0.95
+  },
+  badge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 6
   },
-  badgeTxt: { fontSize: 11, fontWeight: "900", flex: 1 },
-
-  dot: { width: 9, height: 9, borderRadius: 99 },
-
-  metaRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
-  metaTxt: { fontSize: 12, fontWeight: "700" },
-  metaDot: { marginHorizontal: 4, fontSize: 12, fontWeight: "900" },
-  coordRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
-  coordTxt: { fontSize: 12, fontWeight: "700" },
+  badgeTxt: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  dot: {
+    width: 9,
+    height: 9,
+    borderRadius: 99
+  },
+  reportTitle: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  reportDescription: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  metaRow: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap"
+  },
+  metaTxt: {
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  metaDot: {
+    marginHorizontal: 4,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  coordRow: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap"
+  },
+  coordTxt: {
+    fontSize: 12,
+    fontWeight: "700"
+  },
   mapBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -598,11 +995,19 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 6
   },
-  mapBtnTxt: { fontSize: 11, fontWeight: "900" },
-
-  actionsRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  mapBtnTxt: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  actionsRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap"
+  },
   statusPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -610,10 +1015,12 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 8
   },
-  statusTxt: { fontSize: 11, fontWeight: "900" },
-
+  statusTxt: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -621,9 +1028,15 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 8
   },
-  actionTxt: { fontSize: 11, fontWeight: "900" },
-
-  footer: { marginTop: 12, fontSize: 12, lineHeight: 17 },
+  actionTxt: {
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  footer: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 17
+  }
 });

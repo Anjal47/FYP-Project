@@ -1,164 +1,193 @@
 import React, { useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-} from "react-native";
-import Icon from "react-native-vector-icons/Feather"; // make sure react-native-vector-icons is installed
-import FloatingHelpChat from "../components/FloatingHelpChat";
+import { View, Text, StyleSheet, Pressable, SafeAreaView, ScrollView } from "react-native";
+import Icon from "react-native-vector-icons/Feather";
 import { useAppTheme } from "../context/ThemeContext";
-import { createThemedStyles } from "../utils/themeStyles";
+import { useTranslate } from "../utils/localization";
+const actions = [{
+  label: "Visit Counselors",
+  description: "Start with guided counseling support and booking.",
+  icon: "message-circle",
+  action: "CounselingForm"
+}, {
+  label: "Urgent Therapy",
+  description: "Move into therapy support when you need faster deeper care.",
+  icon: "activity",
+  action: "TherapyScreen"
+}, {
+  label: "Connect to NGOs",
+  description: "Reach support organizations and practical local help.",
+  icon: "users",
+  action: "ConnectToNGOs"
+}];
+export default function CounselingScreen({
+  navigation
+}) {
+  const translate = useTranslate();
+  const localizedActions = actions.map(item => ({
+    ...item,
+    label: translate(item.label),
+    description: translate(item.description)
+  }));
+  const {
+    theme,
+    isDark
+  } = useAppTheme();
+  const styles = useMemo(() => StyleSheet.create(createStyles(theme, isDark)), [theme, isDark]);
+  return <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <Pressable style={styles.backRow} onPress={() => navigation?.goBack?.()}>
+            <View style={styles.backIconWrap}>
+              <Icon name="arrow-left" size={18} color={theme.text} />
+            </View>
+            <Text style={styles.backText}>{translate("Back")}</Text>
+          </Pressable>
 
-const CounselingScreen = ({ navigation }) => {
-  const { theme, isDark } = useAppTheme();
-  const styles = useMemo(
-    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
-    [theme, isDark]
-  );
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backRow}
-          onPress={() => navigation?.goBack?.()}
-        >
-          <Icon name="arrow-left" size={20} color={theme.text} />
-          <Text style={styles.title}>
-            <Text style={styles.titleHighlight}> Counseling</Text>
-            <Text style={styles.titleNormal}>Therapy.</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* BODY */}
-      <View style={styles.body}>
-        <Text style={styles.subtitle}>This is your safe space.</Text>
-
-        <View style={styles.buttonsWrapper}>
-          <MenuButton
-            styles={styles}
-            label="Visit Counselors"
-            onPress={() => navigation.navigate("CounselingForm")}
-            arrowColor={theme.accent}
-          />
-
-          <MenuButton
-            styles={styles}
-            label="Urgent Therapy"
-            onPress={() => navigation.navigate("TherapyScreen")}
-            arrowColor={theme.text}
-          />
-          <MenuButton
-            styles={styles}
-            label="Connect to NGOs"
-            onPress={() => navigation?.navigate?.("ConnectToNGOs")}
-            arrowColor={theme.text}
-          />
+          <Text style={styles.eyebrow}>{translate("Care Hub")}</Text>
+          <Text style={styles.title}>{translate("Choose the kind of support that fits what you need right now.")}</Text>
+          <Text style={styles.subtitle}>{translate("Counseling, therapy, and NGO support now live in one cleaner flow with clearer choices.")}</Text>
         </View>
-      </View>
 
-      {/* ORANGE SIDE PILL */}
-      <FloatingHelpChat bottom={110} fabBottom={145} />
+        <View style={styles.stack}>
+          {localizedActions.map(item => <Pressable key={item.action} style={({
+          pressed
+        }) => [styles.card, pressed && styles.cardPressed]} onPress={() => navigation.navigate(item.action)}>
+              {({
+            pressed
+          }) => <>
+                  <View style={[styles.iconWrap, pressed && styles.iconWrapPressed]}>
+                    <Icon name={item.icon} size={18} color={pressed ? "#FFFFFF" : theme.accentStrong} />
+                  </View>
+                  <View style={styles.cardCopy}>
+                    <Text style={[styles.cardTitle, pressed && styles.cardTitlePressed]}>{item.label}</Text>
+                    <Text style={[styles.cardDesc, pressed && styles.cardDescPressed]}>{item.description}</Text>
+                  </View>
+                  <Icon name="arrow-up-right" size={16} color={pressed ? "#FFFFFF" : theme.accentStrong} />
+                </>}
+            </Pressable>)}
+        </View>
+      </ScrollView>
 
-      {/* BOTTOM TABS */}
-      
-    </SafeAreaView>
-  );
-};
-
-const MenuButton = ({ label, onPress, arrowColor, styles }) => (
-  <TouchableOpacity style={styles.menuButton} onPress={onPress}>
-    <Text style={styles.menuLabel}>{label}</Text>
-    <Icon name="arrow-right" size={18} color={arrowColor} />
-  </TouchableOpacity>
-);
-
-const baseStyles = {
-  container: {
-    flex: 1,
-    backgroundColor: "#F4F4F4",
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E3E3E3",
-  },
-  backRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  titleHighlight: {
-    color: "#FF7A1A",
-  },
-  titleNormal: {
-    color: "#111",
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-  },
-  subtitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111",
-    textAlign: "center",
-    marginBottom: 32,
-  },
-  buttonsWrapper: {
-    gap: 20,
-  },
-  menuButton: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  menuLabel: {
-    fontSize: 16,
-    color: "#222",
-  },
-  bottomBar: {
-    position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: 220,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  tabItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-};
-
-export default CounselingScreen;
+    </SafeAreaView>;
+}
+function createStyles(theme, isDark) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: theme.background
+    },
+    content: {
+      padding: 12,
+      paddingBottom: 140
+    },
+    hero: {
+      backgroundColor: theme.surface,
+      borderRadius: 32,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 24,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.22 : 0.08,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 10
+      },
+      elevation: 4
+    },
+    backRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 10
+    },
+    backIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.surfaceSoft,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.border
+    },
+    backText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    eyebrow: {
+      marginTop: 22,
+      color: theme.accentStrong,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 1,
+      textTransform: "uppercase"
+    },
+    title: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 29,
+      lineHeight: 35,
+      fontWeight: "800",
+      letterSpacing: -0.9,
+      maxWidth: 540
+    },
+    subtitle: {
+      marginTop: 10,
+      color: theme.muted,
+      fontSize: 13,
+      lineHeight: 20,
+      maxWidth: 500
+    },
+    stack: {
+      gap: 12
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 18,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14
+    },
+    cardPressed: {
+      backgroundColor: theme.accentStrong,
+      borderColor: theme.accentStrong
+    },
+    iconWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: theme.accentSoft,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    iconWrapPressed: {
+      backgroundColor: "rgba(255,255,255,0.14)"
+    },
+    cardCopy: {
+      flex: 1
+    },
+    cardTitle: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: "800"
+    },
+    cardTitlePressed: {
+      color: "#FFFFFF"
+    },
+    cardDesc: {
+      marginTop: 4,
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    cardDescPressed: {
+      color: "rgba(255,255,255,0.82)"
+    }
+  };
+}

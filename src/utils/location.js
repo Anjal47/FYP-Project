@@ -1,32 +1,51 @@
 import { Alert, PermissionsAndroid, Platform } from "react-native";
 import Geolocation from "@react-native-community/geolocation";
 
-async function requestAndroidLocationPermission() {
+const DEFAULT_LOCATION_COPY = {
+  permissionTitle: "Allow precise location",
+  permissionMessage: "AngelTouch needs your location to pin the report exactly.",
+  permissionAllow: "Allow",
+  permissionDeny: "Deny",
+  permissionDeniedMessage: "Location permission was denied",
+  locationUnavailableTitle: "Location unavailable",
+  locationUnavailableMessage: "We couldn't fetch your current location.",
+  noPinnedPoint: "No pinpoint selected",
+};
+
+function getLocationCopy(copy = {}) {
+  return { ...DEFAULT_LOCATION_COPY, ...copy };
+}
+
+async function requestAndroidLocationPermission(copy) {
+  const strings = getLocationCopy(copy);
+
   const granted = await PermissionsAndroid.request(
     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     {
-      title: "Allow precise location",
-      message: "AngelTouch needs your location to pin the report exactly.",
-      buttonPositive: "Allow",
-      buttonNegative: "Deny",
+      title: strings.permissionTitle,
+      message: strings.permissionMessage,
+      buttonPositive: strings.permissionAllow,
+      buttonNegative: strings.permissionDeny,
     }
   );
 
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 }
 
-export async function getCurrentPreciseLocation() {
+export async function getCurrentPreciseLocation(copy) {
+  const strings = getLocationCopy(copy);
+
   if (Platform.OS === "android") {
-    const allowed = await requestAndroidLocationPermission();
+    const allowed = await requestAndroidLocationPermission(strings);
     if (!allowed) {
-      throw new Error("Location permission was denied");
+      throw new Error(strings.permissionDeniedMessage);
     }
   }
 
   if (Platform.OS === "ios") {
     const auth = await Geolocation.requestAuthorization("whenInUse");
     if (auth === "denied" || auth === "disabled") {
-      throw new Error("Location permission was denied");
+      throw new Error(strings.permissionDeniedMessage);
     }
   }
 
@@ -41,7 +60,7 @@ export async function getCurrentPreciseLocation() {
         });
       },
       (error) => {
-        reject(new Error(error?.message || "Unable to get current location"));
+        reject(new Error(error?.message || strings.locationUnavailableMessage));
       },
       {
         enableHighAccuracy: true,
@@ -52,12 +71,14 @@ export async function getCurrentPreciseLocation() {
   });
 }
 
-export function formatPinnedLocation(geoLocation) {
+export function formatPinnedLocation(geoLocation, copy) {
+  const strings = getLocationCopy(copy);
+
   if (
     !Number.isFinite(geoLocation?.latitude) ||
     !Number.isFinite(geoLocation?.longitude)
   ) {
-    return "No pinpoint selected";
+    return strings.noPinnedPoint;
   }
 
   const parts = [
@@ -65,15 +86,17 @@ export function formatPinnedLocation(geoLocation) {
   ];
 
   if (Number.isFinite(geoLocation?.accuracy)) {
-    parts.push(`±${Math.round(geoLocation.accuracy)}m`);
+    parts.push(`+/-${Math.round(geoLocation.accuracy)}m`);
   }
 
-  return parts.join(" • ");
+  return parts.join(" | ");
 }
 
-export function showLocationUnavailableAlert(error) {
+export function showLocationUnavailableAlert(error, copy) {
+  const strings = getLocationCopy(copy);
+
   Alert.alert(
-    "Location unavailable",
-    error?.message || "We couldn't fetch your current location."
+    strings.locationUnavailableTitle,
+    error?.message || strings.locationUnavailableMessage
   );
 }

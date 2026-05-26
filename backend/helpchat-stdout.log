@@ -1,0 +1,18 @@
+[dotenv@17.2.3] injecting env (21) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+✅ therapy.routes.js loaded
+✅ API + Socket running on http://localhost:5000
+✅ MongoDB connected
+[0mPOST /api/help-chat [32m200[0m 7156.380 ms - 278[0m
+[0mPOST /api/help-chat [32m200[0m 8401.728 ms - 241[0m
+[0mGET / [32m200[0m 13.656 ms - 35[0m
+[0mPOST /api/auth/register [32m201[0m 269.074 ms - 480[0m
+[0mPOST /api/auth/login [32m200[0m 99.292 ms - 480[0m
+[0mPOST /api/help-chat [32m200[0m 7189.111 ms - 207[0m
+[0mPOST /api/help-chat [32m200[0m 7648.567 ms - 173[0m
+[0mPOST /api/help-chat [32m200[0m 7322.348 ms - 241[0m
+[0mGET /api/traffic/fines/mine [32m200[0m 92.663 ms - 22[0m
+[0mGET /api/donations/approved [32m200[0m 80.341 ms - 502[0m
+[0mGET /uploads/donations/proofImage-1775145369120.png [32m200[0m 4.663 ms - 85044[0m
+[0mGET /api/therapy/my/appointments [32m200[0m 84.148 ms - 29[0m
+[0mGET /api/donations/approved [36m304[0m 85.465 ms - -[0m
+[0mPOST /api/reports [32m201[0m 152.309 ms - 596[0m

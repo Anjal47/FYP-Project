@@ -39,6 +39,18 @@ const DonationRequestSchema = new mongoose.Schema(
       min: 1,
     },
 
+    raisedAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    donorCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     urgency: {
       type: String,
       enum: ["Low", "Medium", "Urgent"],
@@ -70,6 +82,16 @@ const DonationRequestSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
+    },
+
+    isClosed: {
+      type: Boolean,
+      default: false,
+    },
+
+    closedAt: {
+      type: Date,
+      default: null,
     },
 
     createdBy: {

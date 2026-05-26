@@ -1,21 +1,46 @@
-const crypto = require("crypto");
+const Stripe = require("stripe");
 const TrafficFine = require("../models/TrafficFine");
 const TrafficPayment = require("../models/TrafficPayment");
 const User = require("../models/User");
 
-const ESEWA_PRODUCT_CODE = process.env.ESEWA_PRODUCT_CODE || "EPAYTEST";
-const ESEWA_SECRET_KEY = process.env.ESEWA_SECRET_KEY || "8gBm/:&EnhH.1/q";
-const ESEWA_FORM_URL =
-  process.env.ESEWA_FORM_URL || "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
-const ESEWA_STATUS_URL =
-  process.env.ESEWA_STATUS_URL ||
-  "https://rc.esewa.com.np/api/epay/transaction/status/";
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || "";
+const STRIPE_CURRENCY = String(process.env.STRIPE_CURRENCY || "usd").toLowerCase();
+const APP_DEEP_LINK_SCHEME = process.env.APP_DEEP_LINK_SCHEME || "angeltouch";
+
+let stripeClient = null;
+
+function getStripeClient() {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY is not configured on the backend");
+  }
+
+  if (STRIPE_SECRET_KEY.includes("replace_with_your_key")) {
+    throw new Error("STRIPE_SECRET_KEY is still using the placeholder value in backend/.env");
+  }
+
+  if (!stripeClient) {
+    stripeClient = new Stripe(STRIPE_SECRET_KEY);
+  }
+
+  return stripeClient;
+}
 
 function getBaseUrl(req) {
   return process.env.PUBLIC_BACKEND_URL || `${req.protocol}://${req.get("host")}`;
 }
 
-function createTransactionUuid(fineId) {
+function getAppReturnUrl(paymentId, status) {
+  const url = new URL(`${APP_DEEP_LINK_SCHEME}://payment-return`);
+  if (paymentId) {
+    url.searchParams.set("paymentId", String(paymentId));
+  }
+  if (status) {
+    url.searchParams.set("status", String(status));
+  }
+  return url.toString();
+}
+
+function createTransactionRef(fineId) {
   return `fine-${fineId}-${Date.now()}`;
 }
 
@@ -23,11 +48,6 @@ function createFineCode() {
   const year = new Date().getFullYear();
   const suffix = String(Date.now()).slice(-6);
   return `FINE-${year}-${suffix}`;
-}
-
-function createEsewaSignature({ totalAmount, transactionUuid, productCode }) {
-  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-  return crypto.createHmac("sha256", ESEWA_SECRET_KEY).update(message).digest("base64");
 }
 
 function escapeHtml(value) {
@@ -39,51 +59,93 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function decodeEsewaData(encoded) {
-  if (!encoded) return null;
-  try {
-    const raw = Buffer.from(String(encoded), "base64").toString("utf8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+function renderReturnPage({ title, heading, message, paymentId, status, buttonLabel }) {
+  const appUrl = getAppReturnUrl(paymentId, status);
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body { font-family: Arial, sans-serif; background:#f6f7fb; color:#222; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:24px; }
+      .card { background:#fff; border-radius:18px; box-shadow:0 10px 30px rgba(0,0,0,.08); max-width:440px; width:100%; padding:24px; text-align:center; }
+      .btn { display:inline-block; margin-top:18px; background:#111827; color:#fff; text-decoration:none; border:none; border-radius:12px; padding:13px 18px; font-weight:700; }
+      .muted { color:#666; font-size:14px; line-height:1.6; }
+      .hint { margin-top:14px; color:#8a8f98; font-size:13px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2 style="margin-top:0;">${escapeHtml(heading)}</h2>
+      <p class="muted">${message}</p>
+      <a class="btn" href="${escapeHtml(appUrl)}">${escapeHtml(buttonLabel || "Return to AngelTouch")}</a>
+      <p class="hint">If the app does not open automatically, tap the button above.</p>
+    </div>
+    <script>
+      (function () {
+        var appUrl = ${JSON.stringify(appUrl)};
+        setTimeout(function () {
+          window.location.href = appUrl;
+        }, 500);
+      })();
+    </script>
+  </body>
+</html>`;
 }
 
-async function syncPaymentFromEsewaStatus(payment) {
-  const url = new URL(ESEWA_STATUS_URL);
-  url.searchParams.set("product_code", ESEWA_PRODUCT_CODE);
-  url.searchParams.set("total_amount", String(payment.amount));
-  url.searchParams.set("transaction_uuid", payment.transactionRef);
+function toStripeAmount(amount) {
+  const parsed = Number(amount);
 
-  const response = await fetch(url);
-  const rawText = await response.text();
-
-  let data = {};
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    throw new Error("Invalid response from eSewa status API");
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("Fine amount must be a valid positive number");
   }
 
-  payment.gatewayStatus = String(data?.status || "");
-  payment.gatewayRef = String(data?.ref_id || "");
-  payment.gatewayPayload = JSON.stringify(data);
+  return Math.round(parsed * 100);
+}
 
-  if (data?.status === "COMPLETE") {
-    payment.status = "SUCCESS";
-    await payment.save();
-    await TrafficFine.findByIdAndUpdate(payment.fine, { status: "PAID" });
-  } else if (["CANCELED", "NOT_FOUND", "FULL_REFUND", "PARTIAL_REFUND", "AMBIGUOUS"].includes(String(data?.status))) {
-    payment.status = "FAILED";
-    await payment.save();
-    await TrafficFine.findByIdAndUpdate(payment.fine, { status: "UNPAID" });
+async function setPaymentState(payment, status, gatewayStatus, gatewayPayload) {
+  payment.status = status;
+  payment.gatewayStatus = gatewayStatus;
+  payment.gatewayPayload = JSON.stringify(gatewayPayload || {});
+  await payment.save();
+
+  await TrafficFine.findByIdAndUpdate(payment.fine, {
+    status: status === "SUCCESS" ? "PAID" : status === "FAILED" ? "UNPAID" : "PENDING",
+  });
+}
+
+async function syncPaymentFromStripe(payment) {
+  if (!payment.gatewayRef) {
+    throw new Error("Stripe checkout session reference is missing for this payment");
+  }
+
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.retrieve(payment.gatewayRef, {
+    expand: ["payment_intent"],
+  });
+
+  const paymentStatus = String(session.payment_status || "").toLowerCase();
+  const sessionStatus = String(session.status || "").toLowerCase();
+  const intentId = session.payment_intent && typeof session.payment_intent === "object"
+    ? session.payment_intent.id
+    : session.payment_intent;
+
+  payment.gatewayRef = String(session.id || payment.gatewayRef);
+  if (intentId) {
+    payment.transactionRef = String(intentId);
+  }
+
+  if (paymentStatus === "paid") {
+    await setPaymentState(payment, "SUCCESS", sessionStatus || paymentStatus, session);
+  } else if (sessionStatus === "expired" || sessionStatus === "complete" || paymentStatus === "unpaid") {
+    await setPaymentState(payment, "FAILED", sessionStatus || paymentStatus, session);
   } else {
-    payment.status = "PENDING";
-    await payment.save();
-    await TrafficFine.findByIdAndUpdate(payment.fine, { status: "PENDING" });
+    await setPaymentState(payment, "PENDING", sessionStatus || paymentStatus, session);
   }
 
-  return data;
+  return session;
 }
 
 exports.createFine = async (req, res) => {
@@ -194,44 +256,92 @@ exports.initiatePayment = async (req, res) => {
       });
     }
 
-    const transactionRef = createTransactionUuid(fine._id);
-    const totalAmount = String(fine.amount);
+    if (fine.status === "PAID") {
+      return res.status(409).json({
+        ok: false,
+        message: "This fine has already been paid",
+      });
+    }
+
+    const existingPendingPayment = await TrafficPayment.findOne({
+      fine: fine._id,
+      status: "PENDING",
+      method: "STRIPE",
+    }).sort({ createdAt: -1 });
+
+    if (existingPendingPayment) {
+      return res.status(409).json({
+        ok: false,
+        message: "A payment for this fine is already in progress. Return to the app and tap Verify Payment before trying again.",
+        payment: existingPendingPayment,
+      });
+    }
+
+    const baseUrl = getBaseUrl(req);
+    const localRef = createTransactionRef(fine._id);
+
     const payment = await TrafficPayment.create({
       fine: fine._id,
       amount: fine.amount,
-      transactionRef,
+      transactionRef: localRef,
       status: "PENDING",
-      method: "ESEWA",
+      method: "STRIPE",
     });
+
+    const stripe = getStripeClient();
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      client_reference_id: String(payment._id),
+      customer_email: req.user?.email || undefined,
+      success_url: `${baseUrl}/api/traffic/payments/stripe/success?paymentId=${payment._id}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/api/traffic/payments/stripe/cancel?paymentId=${payment._id}&session_id={CHECKOUT_SESSION_ID}`,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: STRIPE_CURRENCY,
+            product_data: {
+              name: `Traffic Fine ${fine.fineCode || ""}`.trim(),
+              description: fine.reason,
+            },
+            unit_amount: toStripeAmount(fine.amount),
+          },
+        },
+      ],
+      metadata: {
+        paymentId: String(payment._id),
+        fineId: String(fine._id),
+        fineCode: String(fine.fineCode || ""),
+        localRef,
+      },
+    });
+
+    const checkoutUrl =
+      session.url ||
+      session?.next_action?.redirect_to_url?.url ||
+      "";
+
+    if (!checkoutUrl) {
+      throw new Error(
+        `Stripe Checkout session was created without a redirect URL${session?.id ? ` (session ${session.id})` : ""}`
+      );
+    }
+
+    payment.gatewayRef = String(session.id || "");
+    payment.gatewayStatus = String(session.status || "open");
+    payment.gatewayPayload = JSON.stringify(session);
+    await payment.save();
 
     await TrafficFine.findByIdAndUpdate(fine._id, { status: "PENDING" });
-
-    const baseUrl = getBaseUrl(req);
-    const formFields = {
-      amount: totalAmount,
-      tax_amount: "0",
-      total_amount: totalAmount,
-      transaction_uuid: transactionRef,
-      product_code: ESEWA_PRODUCT_CODE,
-      product_service_charge: "0",
-      product_delivery_charge: "0",
-      success_url: `${baseUrl}/api/traffic/payments/esewa/success?paymentId=${payment._id}`,
-      failure_url: `${baseUrl}/api/traffic/payments/esewa/failure?paymentId=${payment._id}`,
-      signed_field_names: "total_amount,transaction_uuid,product_code",
-    };
-    formFields.signature = createEsewaSignature({
-      totalAmount: formFields.total_amount,
-      transactionUuid: formFields.transaction_uuid,
-      productCode: formFields.product_code,
-    });
 
     return res.json({
       ok: true,
       payment,
-      esewa: {
-        formUrl: ESEWA_FORM_URL,
-        redirectUrl: `${baseUrl}/api/traffic/payments/${payment._id}/esewa`,
-        formFields,
+      stripe: {
+        checkoutUrl,
+        sessionId: session.id,
+        currency: STRIPE_CURRENCY,
       },
     });
   } catch (e) {
@@ -269,14 +379,14 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
-    const verification = await syncPaymentFromEsewaStatus(payment);
+    const verification = await syncPaymentFromStripe(payment);
 
     return res.json({
       ok: true,
       message:
         payment.status === "SUCCESS"
           ? "Payment verified successfully"
-          : `Payment status: ${verification?.status || payment.status}`,
+          : `Payment status: ${verification?.payment_status || verification?.status || payment.status}`,
       payment,
       verification,
     });
@@ -288,168 +398,61 @@ exports.verifyPayment = async (req, res) => {
   }
 };
 
-exports.renderEsewaForm = async (req, res) => {
-  try {
-    const payment = await TrafficPayment.findById(req.params.paymentId).populate("fine");
-    if (!payment) {
-      return res.status(404).send("<h1>Payment not found</h1>");
-    }
-
-    const totalAmount = String(payment.amount);
-    const formFields = {
-      amount: totalAmount,
-      tax_amount: "0",
-      total_amount: totalAmount,
-      transaction_uuid: payment.transactionRef,
-      product_code: ESEWA_PRODUCT_CODE,
-      product_service_charge: "0",
-      product_delivery_charge: "0",
-      success_url: `${getBaseUrl(req)}/api/traffic/payments/esewa/success?paymentId=${payment._id}`,
-      failure_url: `${getBaseUrl(req)}/api/traffic/payments/esewa/failure?paymentId=${payment._id}`,
-      signed_field_names: "total_amount,transaction_uuid,product_code",
-    };
-    formFields.signature = createEsewaSignature({
-      totalAmount: formFields.total_amount,
-      transactionUuid: formFields.transaction_uuid,
-      productCode: formFields.product_code,
-    });
-
-    const inputs = Object.entries(formFields)
-      .map(
-        ([key, value]) =>
-          `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}" />`
-      )
-      .join("");
-
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.send(`<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Redirecting to eSewa</title>
-    <style>
-      body { font-family: Arial, sans-serif; background:#f6f7fb; color:#222; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; padding:24px; }
-      .card { background:#fff; border-radius:18px; box-shadow:0 10px 30px rgba(0,0,0,.08); max-width:420px; width:100%; padding:24px; text-align:center; }
-      .btn { display:inline-block; margin-top:16px; background:#60bb46; color:#fff; border:none; border-radius:12px; padding:12px 18px; font-weight:700; cursor:pointer; -webkit-appearance:none; appearance:none; }
-      .muted { color:#666; font-size:14px; line-height:1.5; }
-      .tap { display:block; text-decoration:none; }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h2>Redirecting to eSewa</h2>
-      <p class="muted">Your sandbox fine payment is being prepared. If the page does not continue automatically, tap the button below.</p>
-      <form id="esewa-form" action="${escapeHtml(ESEWA_FORM_URL)}" method="POST">
-        ${inputs}
-        <button id="esewa-btn" class="btn" type="button">Continue to eSewa</button>
-      </form>
-      <noscript>
-        <p class="muted">JavaScript is disabled. Tap the button above to continue.</p>
-      </noscript>
-    </div>
-    <script>
-      (function () {
-        var form = document.getElementById('esewa-form');
-        var button = document.getElementById('esewa-btn');
-        var submitted = false;
-
-        function submitEsewa() {
-          if (!form || submitted) return false;
-          submitted = true;
-          try {
-            HTMLFormElement.prototype.submit.call(form);
-          } catch (error) {
-            submitted = false;
-          }
-          return false;
-        }
-
-        function trySubmit() {
-          if (!form || submitted) return;
-          submitEsewa();
-        }
-
-        if (button) {
-          button.addEventListener('click', submitEsewa);
-          button.addEventListener('touchend', function (event) {
-            event.preventDefault();
-            submitEsewa();
-          });
-        }
-
-        document.body.addEventListener('touchend', function () {
-          if (!submitted) submitEsewa();
-        }, { passive: true });
-
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-          setTimeout(trySubmit, 150);
-        } else {
-          document.addEventListener('DOMContentLoaded', function () {
-            setTimeout(trySubmit, 150);
-          });
-        }
-
-        setTimeout(trySubmit, 900);
-      })();
-    </script>
-  </body>
-</html>`);
-  } catch (e) {
-    return res.status(500).send(`<h1>Payment setup failed</h1><p>${escapeHtml(e.message)}</p>`);
-  }
-};
-
-exports.handleEsewaSuccess = async (req, res) => {
+exports.handleStripeSuccess = async (req, res) => {
   try {
     const payment = await TrafficPayment.findById(req.query.paymentId);
     if (!payment) {
       return res.status(404).send("<h1>Payment not found</h1>");
     }
 
-    const decoded = decodeEsewaData(req.query.data);
-    if (decoded) {
-      payment.gatewayStatus = String(decoded.status || "");
-      payment.gatewayRef = String(decoded.transaction_code || "");
-      payment.gatewayPayload = JSON.stringify(decoded);
+    if (req.query.session_id) {
+      payment.gatewayRef = String(req.query.session_id);
       await payment.save();
     }
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.send(`<!doctype html>
-<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Payment Received</title></head>
-<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px;">
-  <div style="max-width:420px;margin:40px auto;background:#fff;border-radius:18px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-    <h2 style="margin-top:0;">Payment Response Received</h2>
-    <p style="color:#555;line-height:1.5;">eSewa returned a success response. Please go back to the app and tap <strong>Verify Payment</strong> to confirm the transaction status.</p>
-  </div>
-</body></html>`);
+    return res.send(
+      renderReturnPage({
+        title: "Payment Received",
+        heading: "Stripe Payment Received",
+        message:
+          "Stripe has returned you to the app flow. We will try to reopen AngelTouch for you now so you can confirm the payment.",
+        paymentId: payment._id,
+        status: "success",
+        buttonLabel: "Back to AngelTouch",
+      })
+    );
   } catch (e) {
     return res.status(500).send(`<h1>Payment callback failed</h1><p>${escapeHtml(e.message)}</p>`);
   }
 };
 
-exports.handleEsewaFailure = async (req, res) => {
+exports.handleStripeCancel = async (req, res) => {
   try {
     const payment = await TrafficPayment.findById(req.query.paymentId);
     if (payment) {
-      payment.gatewayStatus = "FAILED_OR_CANCELED";
+      if (req.query.session_id) {
+        payment.gatewayRef = String(req.query.session_id);
+      }
+      payment.gatewayStatus = "canceled";
+      payment.gatewayPayload = JSON.stringify({ session_id: req.query.session_id || "" });
       payment.status = "FAILED";
       await payment.save();
       await TrafficFine.findByIdAndUpdate(payment.fine, { status: "UNPAID" });
     }
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.send(`<!doctype html>
-<html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Payment Not Completed</title></head>
-<body style="font-family:Arial,sans-serif;background:#f6f7fb;padding:24px;">
-  <div style="max-width:420px;margin:40px auto;background:#fff;border-radius:18px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.08);">
-    <h2 style="margin-top:0;">Payment Not Completed</h2>
-    <p style="color:#555;line-height:1.5;">The eSewa payment was canceled or not completed. You can return to the app and try again.</p>
-  </div>
-</body></html>`);
+    return res.send(
+      renderReturnPage({
+        title: "Payment Not Completed",
+        heading: "Payment Not Completed",
+        message:
+          "The Stripe checkout session was canceled or not completed. We will try to reopen AngelTouch for you now.",
+        paymentId: payment?._id || req.query.paymentId,
+        status: "cancel",
+        buttonLabel: "Return to AngelTouch",
+      })
+    );
   } catch (e) {
     return res.status(500).send(`<h1>Payment callback failed</h1><p>${escapeHtml(e.message)}</p>`);
   }

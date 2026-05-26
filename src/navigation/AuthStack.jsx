@@ -1,9 +1,19 @@
 // src/navigation/AuthStack.jsx
 import React, { useEffect, useState } from "react";
-import { DefaultTheme, DarkTheme, NavigationContainer } from "@react-navigation/native";
+import { Linking } from "react-native";
+import {
+  DefaultTheme,
+  DarkTheme,
+  NavigationContainer,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAppTheme } from "../context/ThemeContext";
+import {
+  getRoleRoute,
+  parsePaymentReturnUrl,
+  resolveInitialRouteFromStorage,
+} from "./authStack.logic";
 
 /* -------------------- AUTH SCREENS -------------------- */
 import WelcomeScreen from "../screens/WelcomeScreen";
@@ -59,6 +69,7 @@ import MunicipalityWasteDashboardScreen from "../screens/Waste/MunicipalityWaste
 import MunicipalityReportCreateScreen from "../screens/MunicipalityReportCreateScreen";
 import CounselingChatScreen from "../screens/CounselingChatScreen";
 import TherapyChatScreen from "../screens/TherapyChatScreen";
+import VideoCallRoomScreen from "../screens/VideoCallRoomScreen";
 import TherapistChatScreen from "../screens/Therapist/TherapistChatScreen";
 import FinePaymentScreen from "../Traffic/FinePaymentScreen";
 import CrimeReportingHomeScreen from "../screens/CrimeReportHomeScreen";
@@ -67,21 +78,18 @@ import DonateNowScreen from "../screens/Donation/DonateNowScreen";
 
 
 const Stack = createNativeStackNavigator();
-
-/**
- * Decide initial route based on stored user role.
- */
-function getRoleRoute(role) {
-  if (role === "admin") return "AdminTabs";
-  if (role === "counsellor") return "CounsellorHome";
-  if (role === "therapist") return "TherapistHome";
-  if (role === "police") return "PoliceHome";
-  if (role === "municipality") return "MunicipalityWasteDashboard";
-  return "Home";
-}
+const navigationRef = createNavigationContainerRef();
+const linking = {
+  prefixes: ["angeltouch://"],
+  config: {
+    screens: {
+      FinePayment: "payment-return",
+    },
+  },
+};
 
 export default function AuthStack() {
-  const { theme, isDark } = useAppTheme();
+  const { theme, isDark, language } = useAppTheme();
   const [booting, setBooting] = useState(true);
   const [initialRoute, setInitialRoute] = useState("Welcome");
 
@@ -90,18 +98,10 @@ export default function AuthStack() {
 
     async function boot() {
       try {
-        const token = await AsyncStorage.getItem("token");
-        const userStr = await AsyncStorage.getItem("user");
-        const user = userStr ? JSON.parse(userStr) : null;
-
-        // If logged in already -> go role dashboard
-        if (mounted && token && user?.role) {
-          setInitialRoute(getRoleRoute(user.role));
-        } else {
-          setInitialRoute("Welcome");
+        const nextRoute = await resolveInitialRouteFromStorage();
+        if (mounted) {
+          setInitialRoute(nextRoute);
         }
-      } catch (e) {
-        setInitialRoute("Welcome");
       } finally {
         if (mounted) setBooting(false);
       }
@@ -111,6 +111,21 @@ export default function AuthStack() {
     return () => {
       mounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (!url || !navigationRef.isReady()) {
+        return;
+      }
+
+      const params = parsePaymentReturnUrl(url);
+      if (params) {
+        navigationRef.navigate("FinePayment", params);
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   if (booting) return null;
@@ -126,9 +141,10 @@ export default function AuthStack() {
       primary: theme.accent,
     },
   };
+  const localizedNavigationKey = `lang-${language}`;
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer linking={linking} ref={navigationRef} theme={navigationTheme}>
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }}
@@ -143,7 +159,11 @@ export default function AuthStack() {
         <Stack.Screen name="AdminTabs" component={AdminTabs} />
 
         {/* USER */}
-        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          navigationKey={localizedNavigationKey}
+        />
         <Stack.Screen name="Counseling" component={CounselingScreen} />
         <Stack.Screen name="CounselingForm" component={CounselingFormScreen} />
         <Stack.Screen name="Counselors" component={BookCounseling} />
@@ -160,8 +180,16 @@ export default function AuthStack() {
         <Stack.Screen name="TrafficHome" component={TrafficHomeScreen} />
         <Stack.Screen name="TrafficReport" component={TrafficReportScreen} />
         <Stack.Screen name="TrafficRules" component={TrafficRulesScreen} />
-        <Stack.Screen name="ReportingHome" component={ReportingHomeScreen} />
-        <Stack.Screen name="CrimeReport" component={CrimeReportScreen} />
+        <Stack.Screen
+          name="ReportingHome"
+          component={ReportingHomeScreen}
+          navigationKey={localizedNavigationKey}
+        />
+        <Stack.Screen
+          name="CrimeReport"
+          component={CrimeReportScreen}
+          navigationKey={localizedNavigationKey}
+        />
         <Stack.Screen name="ReportStatus" component={ReportStatusScreen} />
         <Stack.Screen name="Support" component={SupportScreen} />
         <Stack.Screen name="EmergencySOS" component={EmergencySOSScreen} />
@@ -174,8 +202,13 @@ export default function AuthStack() {
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="CounselingChat" component={CounselingChatScreen} />
         <Stack.Screen name="TherapyChat" component={TherapyChatScreen} />
+        <Stack.Screen name="VideoCallRoom" component={VideoCallRoomScreen} />
         <Stack.Screen name="FinePayment" component={FinePaymentScreen} />
-        <Stack.Screen name="CrimeReportingHome" component={CrimeReportingHomeScreen} />
+        <Stack.Screen
+          name="CrimeReportingHome"
+          component={CrimeReportingHomeScreen}
+          navigationKey={localizedNavigationKey}
+        />
         <Stack.Screen name="Donation" component={DonationScreen} />
         <Stack.Screen name="DonateNow" component={DonateNowScreen} />
 

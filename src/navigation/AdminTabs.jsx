@@ -6,6 +6,7 @@ import AdminUsersScreen from "../screens/Admin/AdminUsersScreen";
 import  AdminStaffScreen from "../screens/Admin/AdminStaffScreen";
 import  AdminReportsScreen from "../screens/Admin/AdminReportsScreen";
 import AdminDonationsScreen from "../screens/Admin/AdminDonationsScreen";
+import { useTranslate } from "../utils/localization";
 
 const Tab = createBottomTabNavigator();
 
@@ -15,6 +16,7 @@ const Tab = createBottomTabNavigator();
 
  */
 export default function AdminTabs() {
+  const translate = useTranslate();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -40,11 +42,11 @@ export default function AdminTabs() {
         },
       })}
     >
-      <Tab.Screen name="Overview" component={AdminDashboardScreen} />
-      <Tab.Screen name="Users" component={AdminUsersScreen} />
-      <Tab.Screen name="Staff" component={AdminStaffScreen} />
-      <Tab.Screen name="Reports" component={AdminReportsScreen} />
-      <Tab.Screen name="Donations" component={AdminDonationsScreen} />
+      <Tab.Screen name="Overview" component={AdminDashboardScreen} options={{ tabBarLabel: translate("Overview") }} />
+      <Tab.Screen name="Users" component={AdminUsersScreen} options={{ tabBarLabel: translate("Users") }} />
+      <Tab.Screen name="Staff" component={AdminStaffScreen} options={{ tabBarLabel: translate("Staff") }} />
+      <Tab.Screen name="Reports" component={AdminReportsScreen} options={{ tabBarLabel: translate("Reports") }} />
+      <Tab.Screen name="Donations" component={AdminDonationsScreen} options={{ tabBarLabel: translate("Donations") }} />
 
     </Tab.Navigator>
   );

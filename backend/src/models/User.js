@@ -5,7 +5,10 @@ const UserSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, default: "" },
+    googleId: { type: String, default: "" },
+    resetPasswordTokenHash: { type: String, default: "" },
+    resetPasswordExpiresAt: { type: Date, default: null },
 
  role: {
   type: String,

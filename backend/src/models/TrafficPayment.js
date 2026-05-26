@@ -8,7 +8,7 @@ const TrafficPaymentSchema = new mongoose.Schema(
 
     method: {
       type: String,
-      enum: ["ESEWA", "MOCK"],
+      enum: ["STRIPE", "MOCK"],
       default: "MOCK",
     },
 

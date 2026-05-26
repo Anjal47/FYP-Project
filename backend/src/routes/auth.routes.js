@@ -4,6 +4,9 @@ const auth = require("../middleware/auth");
 
 router.post("/register", c.registerUser);
 router.post("/login", c.login);
+router.post("/forgot-password", c.requestPasswordReset);
+router.get("/reset-password", c.renderResetPassword);
+router.post("/reset-password", c.resetPassword);
 
 // ✅ profile
 router.get("/me", auth, c.me);

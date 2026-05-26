@@ -22,6 +22,7 @@ const counselingRoutes = require("./src/routes/counseling.routes");
 const therapyRoutes = require("./src/routes/therapy.routes");
 
 const chatRoutes = require("./src/routes/chat.routes");
+const helpChatRoutes = require("./src/routes/helpChat.routes");
 
 // ✅ Traffic routes
 const trafficRoutes = require("./src/routes/traffic.routes");
@@ -70,6 +71,7 @@ app.use("/api/donations", donationRoutes);
 
 // ✅ Chat
 app.use("/api/chat", chatRoutes);
+app.use("/api/help-chat", helpChatRoutes);
 
 // ✅ Traffic
 app.use("/api/traffic", trafficRoutes);

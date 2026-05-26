@@ -1,78 +1,66 @@
-// src/screens/CounselingFormScreen.jsx
 import React, { useMemo, useState } from "react";
-import {
-  SafeAreaView,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
+import { SafeAreaView, View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/Feather";
-import FloatingHelpChat from "../components/FloatingHelpChat";
 import { useAppTheme } from "../context/ThemeContext";
-import { createThemedStyles } from "../utils/themeStyles";
-
-const ORANGE = "#FF7A1A";
+import { useTranslate } from "../utils/localization";
 const BASE_URL = "http://10.0.2.2:5000";
-
 const problemOptions = ["Anxiety", "Depression", "Family Issues", "Relationship Issues", "Other"];
 const genderOptions = ["Male", "Female"];
 const languageOptions = ["Nepali", "English"];
 const modeOptions = ["Online", "Offline"];
-
-/**
- * ✅ Create counseling request
- * returns: { ok:true, request:{ _id / id } }
- */
 async function apiCreateCounselingRequest(token, payload) {
   const res = await fetch(`${BASE_URL}/api/counseling/requests`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload || {}),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload || {})
   });
-
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json?.message || "Failed to submit form");
   return json;
 }
-
-const CounselingFormScreen = ({ navigation }) => {
-  const { theme, isDark } = useAppTheme();
-  // form values
+export default function CounselingFormScreen({
+  navigation
+}) {
+  const translate = useTranslate();
+  const {
+    theme,
+    isDark
+  } = useAppTheme();
+  const styles = useMemo(() => StyleSheet.create(createStyles(theme, isDark)), [theme, isDark]);
   const [problem, setProblem] = useState("");
   const [age, setAge] = useState("");
   const [gender, setGender] = useState("");
   const [language, setLanguage] = useState("");
   const [mode, setMode] = useState("");
   const [description, setDescription] = useState("");
-
-  // dropdown open states
   const [problemOpen, setProblemOpen] = useState(false);
   const [genderOpen, setGenderOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
-
   const [submitting, setSubmitting] = useState(false);
   const [bookedLoading, setBookedLoading] = useState(false);
-  const styles = useMemo(
-    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
-    [theme, isDark]
-  );
-
   const closeAllDropdowns = () => {
     setProblemOpen(false);
     setGenderOpen(false);
     setLanguageOpen(false);
     setModeOpen(false);
   };
-
+  const validate = () => {
+    if (!problem || !age || !gender || !language || !mode) {
+      Alert.alert(translate("Missing"), translate("Please fill all required fields."));
+      return false;
+    }
+    const a = Number(age);
+    if (!Number.isFinite(a) || a <= 0) {
+      Alert.alert(translate("Invalid age"), translate("Please enter a valid age."));
+      return false;
+    }
+    return true;
+  };
   const bookedSessions = async () => {
     try {
       setBookedLoading(true);
@@ -81,462 +69,345 @@ const CounselingFormScreen = ({ navigation }) => {
       setBookedLoading(false);
     }
   };
-
-  const validate = () => {
-    if (!problem || !age || !gender || !language || !mode) {
-      Alert.alert("Missing", "Please fill all required fields.");
-      return false;
-    }
-    const a = Number(age);
-    if (!Number.isFinite(a) || a <= 0) {
-      Alert.alert("Invalid age", "Please enter a valid age.");
-      return false;
-    }
-    return true;
-  };
-
   const handleSubmit = async () => {
     if (!validate()) return;
-
     try {
       setSubmitting(true);
-
       const token = await AsyncStorage.getItem("token");
       if (!token) {
-        navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: "Login"
+          }]
+        });
         return;
       }
-
       const payload = {
         problem,
         age: Number(age),
         gender,
         language,
         mode,
-        description,
+        description
       };
-
       const json = await apiCreateCounselingRequest(token, payload);
-
-      // support both id styles
       const requestId = json?.request?._id || json?.request?.id;
-
-      Alert.alert(
-        "Submitted ✅",
-        "Your counseling request has been submitted. Now choose a counselor.",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.navigate("Counselors", { requestId }),
-          },
-        ]
-      );
-    } catch (e) {
-      Alert.alert("Submit failed", e?.message || "Something went wrong");
+      Alert.alert(translate("Submitted"), translate("Your counseling request is ready. Choose a counsellor next."), [{
+        text: translate("Continue"),
+        onPress: () => navigation.navigate("Counselors", {
+          requestId
+        })
+      }]);
+    } catch (error) {
+      Alert.alert(translate("Submit failed"), error?.message || "Something went wrong");
     } finally {
       setSubmitting(false);
     }
   };
+  return <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.hero}>
+            <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <View style={styles.backIconWrap}>
+                <Icon name="arrow-left" size={18} color={theme.text} />
+              </View>
+              <Text style={styles.backText}>{translate("Back")}</Text>
+            </TouchableOpacity>
 
-  const handleSettingsPress = () => navigation.navigate("Settings");
-  const handleHomePress = () => navigation.navigate("Home");
-  const handleProfilePress = () => navigation.navigate("Profile");
-
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
-          <Icon name="arrow-left" size={20} color={theme.text} />
-          <Text style={styles.headerTitle}> Counseling</Text>
-        </TouchableOpacity>
-      </View>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Problem / Issue */}
-          <Text style={styles.label}>Problem/Issue *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => {
-              closeAllDropdowns();
-              setProblemOpen((prev) => !prev);
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.placeholder, problem ? styles.selectedValue : null]}>
-              {problem || "Problem..."}
-            </Text>
-            <Icon name={problemOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
-          </TouchableOpacity>
-          {problemOpen && (
-            <View style={styles.dropdownList}>
-              {problemOptions.map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setProblem(item);
-                    setProblemOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{item}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Age & Gender */}
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
-              <Text style={styles.label}>Age *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="XX"
-                placeholderTextColor={theme.muted}
-                keyboardType="numeric"
-                value={age}
-                onChangeText={setAge}
-              />
-            </View>
-
-            <View style={[styles.rowItem, { marginRight: 0 }]}>
-              <Text style={styles.label}>Gender *</Text>
-              <TouchableOpacity
-                style={styles.dropdown}
-                onPress={() => {
-                  closeAllDropdowns();
-                  setGenderOpen((prev) => !prev);
-                }}
-                activeOpacity={0.9}
-              >
-                <Text style={[styles.placeholder, gender ? styles.selectedValue : null]}>
-                  {gender || "Select..."}
-                </Text>
-                <Icon name={genderOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
-              </TouchableOpacity>
-              {genderOpen && (
-                <View style={styles.dropdownList}>
-                  {genderOptions.map((item) => (
-                    <TouchableOpacity
-                      key={item}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setGender(item);
-                        setGenderOpen(false);
-                      }}
-                    >
-                      <Text style={styles.dropdownItemText}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
+            <View style={styles.heroGlow} />
+            <Text style={styles.heroEyebrow}>{translate("Counseling Intake")}</Text>
+            <Text style={styles.heroTitle}>{translate("Start with a clear request, then move into booking.")}</Text>
+            <Text style={styles.heroSubtitle}>{translate("Smaller inputs, better grouping, and a calmer path to getting help.")}</Text>
           </View>
 
-          {/* Language Preference */}
-          <Text style={styles.label}>Language Preference *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => {
+          <View style={styles.panel}>
+            <Text style={styles.sectionTitle}>{translate("Session details")}</Text>
+            <FieldDropdown label={translate("Problem / Issue")} value={problem} placeholder={translate("Choose one")} open={problemOpen} setOpen={fn => {
+            closeAllDropdowns();
+            setProblemOpen(fn(problemOpen));
+          }} onChoose={value => {
+            setProblem(value);
+            setProblemOpen(false);
+          }} options={problemOptions} styles={styles} theme={theme} />
+
+            <View style={styles.row}>
+              <FieldInput label={translate("Age")} value={age} onChangeText={setAge} keyboardType="numeric" styles={styles} theme={theme} />
+              <FieldDropdown label={translate("Gender")} value={gender} placeholder={translate("Select")} open={genderOpen} setOpen={fn => {
               closeAllDropdowns();
-              setLanguageOpen((prev) => !prev);
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.placeholder, language ? styles.selectedValue : null]}>
-              {language || "Language..."}
-            </Text>
-            <Icon name={languageOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
-          </TouchableOpacity>
-          {languageOpen && (
-            <View style={styles.dropdownList}>
-              {languageOptions.map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setLanguage(item);
-                    setLanguageOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{item}</Text>
-                </TouchableOpacity>
-              ))}
+              setGenderOpen(fn(genderOpen));
+            }} onChoose={value => {
+              setGender(value);
+              setGenderOpen(false);
+            }} options={genderOptions} styles={styles} theme={theme} compact />
             </View>
-          )}
 
-          {/* Mode of Communication */}
-          <Text style={styles.label}>Mode of Communication *</Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => {
-              closeAllDropdowns();
-              setModeOpen((prev) => !prev);
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.placeholder, mode ? styles.selectedValue : null]}>
-              {mode || "Mode of Communication..."}
-            </Text>
-            <Icon name={modeOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.muted} />
-          </TouchableOpacity>
-          {modeOpen && (
-            <View style={styles.dropdownList}>
-              {modeOptions.map((item) => (
-                <TouchableOpacity
-                  key={item}
-                  style={styles.dropdownItem}
-                  onPress={() => {
-                    setMode(item);
-                    setModeOpen(false);
-                  }}
-                >
-                  <Text style={styles.dropdownItemText}>{item}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+            <FieldDropdown label={translate("Language Preference")} value={language} placeholder={translate("Choose language")} open={languageOpen} setOpen={fn => {
+            closeAllDropdowns();
+            setLanguageOpen(fn(languageOpen));
+          }} onChoose={value => {
+            setLanguage(value);
+            setLanguageOpen(false);
+          }} options={languageOptions} styles={styles} theme={theme} />
 
-          {/* Description */}
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Enter Description..."
-            placeholderTextColor={theme.muted}
-            multiline
-            value={description}
-            onChangeText={setDescription}
-          />
+            <FieldDropdown label={translate("Mode of Communication")} value={mode} placeholder={translate("Choose mode")} open={modeOpen} setOpen={fn => {
+            closeAllDropdowns();
+            setModeOpen(fn(modeOpen));
+          }} onChoose={value => {
+            setMode(value);
+            setModeOpen(false);
+          }} options={modeOptions} styles={styles} theme={theme} />
 
-          <Text style={styles.helperText}>Please fill every details.</Text>
+            <FieldInput label={translate("Description")} value={description} onChangeText={setDescription} multiline placeholder={translate("Share any context that will help the counsellor prepare.")} styles={styles} theme={theme} />
 
-          {/* Submit */}
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && { opacity: 0.75 }]}
-            onPress={handleSubmit}
-            disabled={submitting}
-            activeOpacity={0.9}
-          >
-            {submitting ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <ActivityIndicator color="#111" />
-                <Text style={styles.submitText}>Submitting...</Text>
-              </View>
-            ) : (
-              <Text style={styles.submitText}>Submit</Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity style={[styles.primaryButton, submitting && styles.buttonDisabled]} onPress={handleSubmit} activeOpacity={0.9} disabled={submitting}>
+              {submitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{translate("Continue to Counsellors")}</Text>}
+            </TouchableOpacity>
 
-          {/* View Booked Sessions */}
-          <TouchableOpacity
-            style={[styles.submitButton1, bookedLoading && { opacity: 0.75 }]}
-            onPress={bookedSessions}
-            disabled={bookedLoading}
-            activeOpacity={0.9}
-          >
-            {bookedLoading ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <ActivityIndicator color="#111" />
-                <Text style={styles.submitText}>Loading…</Text>
-              </View>
-            ) : (
-              <Text style={styles.submitText}>View Booked Sessions</Text>
-            )}
-          </TouchableOpacity>
+            <TouchableOpacity style={[styles.secondaryButton, bookedLoading && styles.buttonDisabled]} onPress={bookedSessions} activeOpacity={0.9} disabled={bookedLoading}>
+              {bookedLoading ? <ActivityIndicator size="small" color={theme.text} /> : <Text style={styles.secondaryButtonText}>{translate("View Booked Sessions")}</Text>}
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* ORANGE SIDE PILL */}
-      <FloatingHelpChat bottom={110} fabBottom={145} />
-
-      {/* ✅ BOTTOM BAR */}
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.tabItem} onPress={handleSettingsPress} activeOpacity={0.8}>
-          <Icon name="settings" size={20} color={theme.muted} />
-          <Text style={styles.tabLabel}>Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={handleHomePress} activeOpacity={0.8}>
-          <View style={styles.homeIconWrapper}>
-            <Icon name="home" size={22} color="#FFFFFF" />
-          </View>
-          <Text style={[styles.tabLabel, styles.tabLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.tabItem} onPress={handleProfilePress} activeOpacity={0.8}>
-          <Icon name="user" size={20} color={theme.muted} />
-          <Text style={styles.tabLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
-};
-
-export default CounselingFormScreen;
-
-const baseStyles = {
-  container: { flex: 1, backgroundColor: "#F4F4F4" },
-
-  header: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E3E3E3",
-  },
-  backRow: { flexDirection: "row", alignItems: "center" },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: ORANGE,
-    marginLeft: 8,
-  },
-
-  content: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 160,
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 6,
-  },
-
-  dropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  placeholder: { color: "#B0B0B0", fontSize: 14 },
-  selectedValue: { color: "#222" },
-
-  dropdownList: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
-    overflow: "hidden",
-  },
-  dropdownItem: { paddingHorizontal: 14, paddingVertical: 10 },
-  dropdownItemText: { fontSize: 14, color: "#222" },
-
-  row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  rowItem: { flex: 1, marginRight: 8 },
-
-  input: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#222",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-    marginBottom: 16,
-  },
-  textArea: { height: 100, textAlignVertical: "top" },
-
-  helperText: { fontSize: 12, color: "#555", marginBottom: 20 },
-
-  submitButton: {
-    alignSelf: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 60,
-    paddingVertical: 14,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  submitButton1: {
-    alignSelf: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 60,
-    paddingVertical: 14,
-    borderRadius: 24,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    marginTop: 10,
-  },
-  submitText: { fontSize: 16, fontWeight: "700", color: "#111" },
-
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    top: "55%",
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: -2, height: 2 },
-  },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 28,
-    paddingHorizontal: 32,
-    paddingVertical: 8,
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
-  },
-  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
-  homeIconWrapper: {
-    backgroundColor: ORANGE,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
-  },
-  tabLabel: { fontSize: 11, color: "#9A9A9A", marginTop: 2 },
-  tabLabelActive: { color: ORANGE, fontWeight: "600" },
-};
+    </SafeAreaView>;
+}
+function FieldInput({
+  label,
+  styles,
+  theme,
+  multiline,
+  ...props
+}) {
+  return <View style={styles.fieldWrap}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput {...props} placeholderTextColor={theme.muted} multiline={!!multiline} style={[styles.input, multiline && styles.inputMultiline]} />
+    </View>;
+}
+function FieldDropdown({
+  label,
+  value,
+  placeholder,
+  open,
+  setOpen,
+  onChoose,
+  options,
+  styles,
+  theme,
+  compact
+}) {
+  const translate = useTranslate();
+  return <View style={[styles.fieldWrap, compact && styles.rowField]}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TouchableOpacity style={styles.dropdown} onPress={() => setOpen(prev => !prev)} activeOpacity={0.9}>
+        <Text style={[styles.dropdownValue, !value && styles.dropdownPlaceholder]}>{value ? translate(value) : placeholder}</Text>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={theme.muted} />
+      </TouchableOpacity>
+      {open ? <View style={styles.dropdownList}>
+          {options.map(item => <TouchableOpacity key={item} style={styles.dropdownItem} onPress={() => onChoose(item)} activeOpacity={0.88}>
+              <Text style={styles.dropdownItemText}>{translate(item)}</Text>
+            </TouchableOpacity>)}
+        </View> : null}
+    </View>;
+}
+function createStyles(theme, isDark) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: theme.background
+    },
+    flex: {
+      flex: 1
+    },
+    content: {
+      padding: 12,
+      paddingBottom: 140
+    },
+    hero: {
+      position: "relative",
+      overflow: "hidden",
+      backgroundColor: theme.surface,
+      borderRadius: 30,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 22,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.24 : 0.08,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 10
+      },
+      elevation: 4
+    },
+    heroGlow: {
+      position: "absolute",
+      top: -86,
+      right: -60,
+      width: 210,
+      height: 210,
+      borderRadius: 105,
+      backgroundColor: theme.accentSoft
+    },
+    backRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 10,
+      marginBottom: 18
+    },
+    backIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.surfaceSoft,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    backText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    heroEyebrow: {
+      color: theme.accentStrong,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 1,
+      textTransform: "uppercase"
+    },
+    heroTitle: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 26,
+      lineHeight: 32,
+      fontWeight: "800",
+      letterSpacing: -0.8,
+      maxWidth: 540
+    },
+    heroSubtitle: {
+      marginTop: 10,
+      color: theme.muted,
+      fontSize: 13,
+      lineHeight: 20,
+      maxWidth: 500
+    },
+    panel: {
+      backgroundColor: theme.surface,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 18
+    },
+    sectionTitle: {
+      color: theme.text,
+      fontSize: 16,
+      fontWeight: "800",
+      marginBottom: 10
+    },
+    row: {
+      flexDirection: "row",
+      gap: 12
+    },
+    rowField: {
+      flex: 1
+    },
+    fieldWrap: {
+      marginBottom: 12
+    },
+    fieldLabel: {
+      marginBottom: 6,
+      color: theme.muted,
+      fontSize: 11,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.7
+    },
+    input: {
+      minHeight: 48,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceElevated,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: theme.text,
+      fontSize: 13
+    },
+    inputMultiline: {
+      minHeight: 110,
+      textAlignVertical: "top"
+    },
+    dropdown: {
+      minHeight: 48,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceElevated,
+      paddingHorizontal: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between"
+    },
+    dropdownValue: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    dropdownPlaceholder: {
+      color: theme.muted
+    },
+    dropdownList: {
+      marginTop: 8,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      overflow: "hidden",
+      backgroundColor: theme.surface
+    },
+    dropdownItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 12
+    },
+    dropdownItemText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    primaryButton: {
+      marginTop: 6,
+      minHeight: 48,
+      borderRadius: 18,
+      backgroundColor: theme.accentStrong,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    primaryButtonText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "800"
+    },
+    secondaryButton: {
+      marginTop: 10,
+      minHeight: 48,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceSoft,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    secondaryButtonText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "800"
+    },
+    buttonDisabled: {
+      opacity: 0.75
+    }
+  };
+}

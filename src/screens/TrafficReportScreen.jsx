@@ -1,454 +1,428 @@
-// src/screens/TrafficReportScreen.jsx
-// ✅ Traffic report submit screen
-// ✅ Now shows Report Code after submit + button to jump to TrafficReportStatus (prefilled)
-
 import React, { useMemo, useState } from "react";
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import Icon from "react-native-vector-icons/Feather";
+import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createReportRequest, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
-import FloatingHelpChat from "../components/FloatingHelpChat";
+import { createReportRequest, isReportAudioPickerAvailable, pickReportAudio, pickReportPhoto, pickReportVideo } from "../utils/reportApi";
 import { useAppTheme } from "../context/ThemeContext";
-import { createThemedStyles } from "../utils/themeStyles";
-import {
-  formatPinnedLocation,
-  getCurrentPreciseLocation,
-  showLocationUnavailableAlert,
-} from "../utils/location";
-
-const ORANGE = "#FF7A1A";
-
-/* ----------------------------- Screen ----------------------------- */
-export default function TrafficReportScreen({ navigation }) {
-  const { theme, isDark } = useAppTheme();
+import { formatPinnedLocation, getCurrentPreciseLocation, showLocationUnavailableAlert } from "../utils/location";
+import { useTranslate } from "../utils/localization";
+export default function TrafficReportScreen({
+  navigation
+}) {
+  const translate = useTranslate();
+  const {
+    theme,
+    isDark
+  } = useAppTheme();
+  const styles = useMemo(() => StyleSheet.create(createStyles(theme, isDark)), [theme, isDark]);
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
-  const [media, setMedia] = useState({ photo: null, video: null });
+  const [media, setMedia] = useState({
+    photo: null,
+    audio: null,
+    video: null
+  });
   const [geoLocation, setGeoLocation] = useState(null);
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const styles = useMemo(
-    () => StyleSheet.create(createThemedStyles(baseStyles, theme, isDark)),
-    [theme, isDark]
-  );
-
+  const audioPickerAvailable = isReportAudioPickerAvailable();
   const getToken = async () => AsyncStorage.getItem("token");
-
-  const handleBack = () => navigation?.goBack?.();
-  const onPickPhoto = async () => {
-    try {
-      const file = await pickReportPhoto();
-      if (!file) return;
-      setMedia((prev) => ({ ...prev, photo: file }));
-    } catch (e) {
-      Alert.alert("Picker Error", e?.message || "Could not pick image");
-    }
-  };
-
-  const onPickVideo = async () => {
-    try {
-      const file = await pickReportVideo();
-      if (!file) return;
-      setMedia((prev) => ({ ...prev, video: file }));
-    } catch (e) {
-      Alert.alert("Picker Error", e?.message || "Could not pick video");
-    }
-  };
-  // ✅ Extract report code from different possible backend response shapes
-  const pickReportCode = (resp) => {
-    return (
-      resp?.reportCode ||
-      resp?.code ||
-      resp?.data?.reportCode ||
-      resp?.data?.code ||
-      resp?.report?.reportCode ||
-      resp?.report?.code ||
-      resp?.report?.id ||
-      resp?.report?._id ||
-      resp?.id ||
-      resp?._id ||
-      null
-    );
-  };
-
+  const pickReportCode = resp => resp?.reportCode || resp?.code || resp?.data?.reportCode || resp?.data?.code || resp?.report?.reportCode || resp?.report?.code || resp?.report?.id || resp?.report?._id || resp?.id || resp?._id || null;
   const resetForm = () => {
     setDescription("");
     setLocation("");
     setGeoLocation(null);
   };
-
   const onUseCurrentLocation = async () => {
     try {
       setLocating(true);
       const current = await getCurrentPreciseLocation();
       setGeoLocation(current);
-      setLocation((prev) =>
-        String(prev || "").trim() ? prev : `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`
-      );
-    } catch (e) {
-      showLocationUnavailableAlert(e);
+      setLocation(prev => String(prev || "").trim() ? prev : `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`);
+    } catch (error) {
+      showLocationUnavailableAlert(error);
     } finally {
       setLocating(false);
     }
   };
-
   const onSubmit = async () => {
     try {
       const d = description.trim();
       const l = location.trim();
-
-      if (!d) return Alert.alert("Missing", "Please enter description.");
-      if (!l) return Alert.alert("Missing", "Please add location / area.");
-
+      if (!d) return Alert.alert(translate("Missing"), translate("Please enter description."));
+      if (!l) return Alert.alert(translate("Missing"), translate("Please add location / area."));
       setSubmitting(true);
-
       const token = await getToken();
-      if (!token) {
-        setSubmitting(false);
-        return Alert.alert("Login required", "Token not found. Please login again.");
-      }
-
-      // ✅ Traffic report payload
-      const payload = {
+      if (!token) return Alert.alert(translate("Login required"), translate("Token not found. Please login again."));
+      const resp = await createReportRequest(token, {
         type: "Traffic",
         area: l,
         description: d,
         priority: "Medium",
-        geoLocation,
-      };
-
-      // ✅ Capture backend response to get report code
-      const resp = await createReportRequest(token, payload, media);
+        geoLocation
+      }, media);
       const reportCode = pickReportCode(resp) || "N/A";
-
-      Alert.alert(
-        "Submitted ✅",
-        `Traffic report sent successfully.\n\nReport Code: ${reportCode}\n\n(Use this code to track status)`,
-        [
-          {
-            text: "Check Status",
-            onPress: () => {
-              resetForm();
-              setMedia({ photo: null, video: null });
-              // ✅ Go to Traffic report status screen + prefill
-              navigation.navigate("TrafficReportStatus", { reportCode });
-            },
-          },
-          {
-            text: "OK",
-            style: "cancel",
-            onPress: () => {
-              resetForm();
-              setMedia({ photo: null, video: null });
-              handleBack();
-            },
-          },
-        ]
-      );
-    } catch (e) {
-      Alert.alert("Error", e?.message || "Something went wrong");
+      Alert.alert(translate("Submitted"), `Traffic report sent successfully.\n\nReport Code: ${reportCode}`, [{
+        text: translate("Check Status"),
+        onPress: () => {
+          resetForm();
+          setMedia({
+            photo: null,
+            audio: null,
+            video: null
+          });
+          navigation.navigate("TrafficReportStatus", {
+            reportCode
+          });
+        }
+      }, {
+        text: translate("Done"),
+        style: "cancel",
+        onPress: () => {
+          resetForm();
+          setMedia({
+            photo: null,
+            audio: null,
+            video: null
+          });
+          navigation.goBack?.();
+        }
+      }]);
+    } catch (error) {
+      Alert.alert(translate("Error"), error?.message || "Something went wrong");
     } finally {
       setSubmitting(false);
     }
   };
+  return <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ReportHero title={translate("Traffic Report")} subtitle={translate("Report road issues with clearer structure and fewer distractions.")} onBack={() => navigation.goBack?.()} styles={styles} theme={theme} />
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backRow} onPress={handleBack}>
-          <Icon name="arrow-left" size={20} color={theme.text} />
-          <Text style={styles.title}>
-            <Text style={styles.titleHighlight}> Traffic</Text>
-            <Text style={styles.titleNormal}>Report.</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>{translate("What happened?")}</Text>
+          <TextInput style={[styles.input, styles.textarea]} placeholder={translate("Describe the traffic issue...")} placeholderTextColor={theme.muted} multiline value={description} onChangeText={setDescription} />
+          <Text style={styles.fieldLabel}>{translate("Location")}</Text>
+          <TextInput style={[styles.input, styles.textareaSm]} placeholder={translate("Type address / landmark...")} placeholderTextColor={theme.muted} multiline value={location} onChangeText={setLocation} />
 
-      {/* BODY */}
-      <View style={styles.body}>
-        <TextInput
-          style={styles.descriptionInput}
-          placeholder="Enter Description..."
-          placeholderTextColor={theme.muted}
-          multiline
-          value={description}
-          onChangeText={setDescription}
-        />
+          <TouchableOpacity style={[styles.secondaryButton, (locating || submitting) && styles.buttonDisabled]} onPress={onUseCurrentLocation} activeOpacity={0.9} disabled={locating || submitting}>
+            {locating ? <ActivityIndicator size="small" color={theme.text} /> : <Text style={styles.secondaryButtonText}>{translate("Use Current Location")}</Text>}
+          </TouchableOpacity>
 
-        <Text style={styles.locationLabel}>Add Location</Text>
-        <TextInput
-          style={styles.locationBox}
-          placeholder="Type address / landmark..."
-          placeholderTextColor={theme.muted}
-          multiline
-          value={location}
-          onChangeText={setLocation}
-        />
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>{translate("Pinned point")}</Text>
+            <Text style={styles.infoText}>{formatPinnedLocation(geoLocation)}</Text>
+          </View>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={onUseCurrentLocation}
-          disabled={locating || submitting}
-          style={[styles.locationPinBtn, (locating || submitting) && { opacity: 0.7 }]}
-        >
-          {locating ? (
-            <View style={styles.inlineRow}>
-              <ActivityIndicator size="small" color={ORANGE} />
-              <Text style={styles.locationPinBtnTxt}>Pinning current location...</Text>
-            </View>
-          ) : (
-            <Text style={styles.locationPinBtnTxt}>Use Current Location</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.pinInfoBox}>
-          <Text style={styles.pinInfoTitle}>Pinned point</Text>
-          <Text style={styles.pinInfoText}>{formatPinnedLocation(geoLocation)}</Text>
-        </View>
-
-        <View style={styles.mediaRow}>
-          <MediaButton
-            label={media.photo ? "Change Image" : "Image"}
-            onPress={onPickPhoto}
-            styles={styles}
-          />
-          <MediaButton
-            label="Audio"
-            styles={styles}
-            onPress={() =>
-              Alert.alert(
-                "Audio picker not ready",
-                "Audio upload is supported on the backend, but this app needs a document picker library to choose audio files."
-              )
+          <View style={styles.mediaRow}>
+            <MediaChip label={media.photo ? "Change Image" : "Image"} onPress={async () => {
+            const file = await pickReportPhoto({
+              title: translate("Add Image"),
+              message: translate("Choose how to add an image for this report."),
+              uploadLabel: translate("Upload"),
+              captureLabel: translate("Capture"),
+              cancelLabel: translate("Cancel")
+            }).catch(e => Alert.alert(translate("Picker Error"), e?.message || "Could not pick image"));
+            if (file) setMedia(prev => ({
+              ...prev,
+              photo: file
+            }));
+          }} styles={styles} />
+            <MediaChip label={media.audio ? "Change Audio" : "Audio"} onPress={async () => {
+            try {
+              const file = await pickReportAudio();
+              if (file) setMedia(prev => ({
+                ...prev,
+                audio: file
+              }));
+            } catch (error) {
+              Alert.alert(translate("Picker Error"), error?.message || "Could not pick audio");
             }
-          />
-          <MediaButton
-            label={media.video ? "Change Video" : "Video"}
-            onPress={onPickVideo}
-            styles={styles}
-          />
+          }} disabled={!audioPickerAvailable} styles={styles} />
+            <MediaChip label={media.video ? "Change Video" : "Video"} onPress={async () => {
+            const file = await pickReportVideo({
+              title: translate("Add Video"),
+              message: translate("Choose how to add a video for this report."),
+              uploadLabel: translate("Upload"),
+              captureLabel: translate("Capture"),
+              cancelLabel: translate("Cancel")
+            }).catch(e => Alert.alert(translate("Picker Error"), e?.message || "Could not pick video"));
+            if (file) setMedia(prev => ({
+              ...prev,
+              video: file
+            }));
+          }} styles={styles} />
+          </View>
+
+          {!audioPickerAvailable ? <MediaMeta label={translate("Audio upload")} value="Rebuild the app once to enable audio attachments." styles={styles} /> : null}
+          <MediaMeta label={translate("Selected image")} value={media.photo?.name} styles={styles} />
+          <MediaMeta label={translate("Selected audio")} value={media.audio?.name} styles={styles} />
+          <MediaMeta label={translate("Selected video")} value={media.video?.name} styles={styles} />
+
+          <TouchableOpacity style={[styles.primaryButton, submitting && styles.buttonDisabled]} onPress={onSubmit} activeOpacity={0.9} disabled={submitting}>
+            {submitting ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{translate("Submit Report")}</Text>}
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.mediaInfoBox}>
-          <Text style={styles.mediaInfoTitle}>Optional evidence</Text>
-          <Text style={styles.mediaInfoText}>
-            You can submit the report without media, but photo or video evidence helps with review.
-          </Text>
-          {!!media.photo?.name && <Text style={styles.mediaPickedText}>Photo: {media.photo.name}</Text>}
-          {!!media.video?.name && <Text style={styles.mediaPickedText}>Video: {media.video.name}</Text>}
+      </ScrollView>
+    </SafeAreaView>;
+}
+function ReportHero({
+  title,
+  subtitle,
+  onBack,
+  styles
+}) {
+  const translate = useTranslate();
+  return <View style={styles.hero}>
+      <TouchableOpacity style={styles.backRow} onPress={onBack} activeOpacity={0.85}>
+        <View style={styles.backIconWrap}>
+          <Text style={styles.backArrow}>←</Text>
         </View>
-
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={onSubmit}
-          disabled={submitting}
-          style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
-        >
-          {submitting ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <ActivityIndicator color="#fff" />
-              <Text style={styles.submitTxt}>Submitting…</Text>
-            </View>
-          ) : (
-            <Text style={styles.submitTxt}>Submit Report</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Optional: small hint below button */}
-        <Text style={styles.hint}>
-          After submission, you’ll receive a Report Code to track your traffic report status.
-        </Text>
-      </View>
-
-      {/* ORANGE SIDE PILL */}
-      <FloatingHelpChat bottom={110} fabBottom={145} />
-
-      {/* BOTTOM TABS */}
-
-    </SafeAreaView>
-  );
+        <Text style={styles.backText}>{translate("Back")}</Text>
+      </TouchableOpacity>
+      <View style={styles.heroGlow} />
+      <Text style={styles.heroEyebrow}>{translate("Reporting")}</Text>
+      <Text style={styles.heroTitle}>{title}</Text>
+      <Text style={styles.heroSubtitle}>{subtitle}</Text>
+    </View>;
 }
-
-/* ----------------------------- Components ----------------------------- */
-function MediaButton({ label, onPress, styles }) {
-  return (
-    <TouchableOpacity style={styles.mediaButton} onPress={onPress} activeOpacity={0.9}>
-      <Text style={styles.mediaLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
+function MediaChip({
+  label,
+  onPress,
+  styles,
+  disabled = false
+}) {
+  return <TouchableOpacity style={[styles.mediaChip, disabled && styles.mediaChipDisabled]} onPress={onPress} activeOpacity={0.9} disabled={disabled}>
+      <Text style={[styles.mediaChipText, disabled && styles.mediaChipTextDisabled]}>{label}</Text>
+    </TouchableOpacity>;
 }
-
-/* ----------------------------- Styles ----------------------------- */
-const baseStyles = {
-  container: { flex: 1, backgroundColor: "#F4F4F4" },
-
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E3E3E3",
-  },
-  backRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  title: { fontSize: 20, fontWeight: "700" },
-  titleHighlight: { color: ORANGE },
-  titleNormal: { color: "#111" },
-
-  body: { flex: 1, paddingHorizontal: 24, paddingTop: 24 },
-
-  descriptionInput: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#111",
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    marginBottom: 26,
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-
-  locationLabel: { fontSize: 15, fontWeight: "600", color: "#111", marginBottom: 10 },
-
-  locationBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#111",
-    minHeight: 140,
-    textAlignVertical: "top",
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-    marginBottom: 28,
-  },
-
-  mediaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  inlineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  locationPinBtn: {
-    marginTop: -12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: ORANGE,
-    borderRadius: 16,
-    backgroundColor: "#FFF7F0",
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  locationPinBtnTxt: { color: ORANGE, fontSize: 13, fontWeight: "800" },
-  pinInfoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  pinInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
-  pinInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
-
-  mediaButton: {
-    width: "30%",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  mediaLabel: { fontSize: 13, fontWeight: "600", color: "#111" },
-  mediaInfoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 12,
-    marginBottom: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  mediaInfoTitle: { fontSize: 13, fontWeight: "800", color: "#111" },
-  mediaInfoText: { marginTop: 6, fontSize: 12, color: "#666", lineHeight: 17 },
-  mediaPickedText: { marginTop: 6, fontSize: 12, fontWeight: "700", color: ORANGE },
-
-  submitBtn: {
-    marginTop: 6,
-    backgroundColor: ORANGE,
-    borderRadius: 18,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
-  },
-  submitTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-
-  hint: {
-    marginTop: 10,
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#777",
-    paddingHorizontal: 10,
-  },
-
-  sidePill: {
-    position: "absolute",
-    right: 0,
-    bottom: 110,
-    width: 56,
-    height: 110,
-    backgroundColor: ORANGE,
-    borderTopLeftRadius: 40,
-    borderBottomLeftRadius: 40,
-    elevation: 5,
-  },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 24,
-    alignSelf: "center",
-    flexDirection: "row",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: 220,
-    elevation: 6,
-  },
-  tabItem: { paddingHorizontal: 12, paddingVertical: 4 },
-};
+function MediaMeta({
+  label,
+  value,
+  styles
+}) {
+  if (!value) return null;
+  return <View style={styles.mediaMetaCard}>
+      <Text style={styles.mediaMetaText}>{label}: {value}</Text>
+    </View>;
+}
+function createStyles(theme, isDark) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: theme.background
+    },
+    content: {
+      padding: 12,
+      paddingBottom: 140
+    },
+    hero: {
+      position: "relative",
+      overflow: "hidden",
+      backgroundColor: theme.surface,
+      borderRadius: 30,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 22,
+      marginBottom: 16,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.24 : 0.08,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 10
+      },
+      elevation: 4
+    },
+    heroGlow: {
+      position: "absolute",
+      top: -86,
+      right: -60,
+      width: 210,
+      height: 210,
+      borderRadius: 105,
+      backgroundColor: theme.accentSoft
+    },
+    backRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 10,
+      marginBottom: 18
+    },
+    backIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.surfaceSoft,
+      borderWidth: 1,
+      borderColor: theme.border,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    backArrow: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: "800"
+    },
+    backText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: "700"
+    },
+    heroEyebrow: {
+      color: theme.accentStrong,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 1,
+      textTransform: "uppercase"
+    },
+    heroTitle: {
+      marginTop: 8,
+      color: theme.text,
+      fontSize: 26,
+      lineHeight: 32,
+      fontWeight: "800",
+      letterSpacing: -0.8,
+      maxWidth: 540
+    },
+    heroSubtitle: {
+      marginTop: 10,
+      color: theme.muted,
+      fontSize: 13,
+      lineHeight: 20,
+      maxWidth: 500
+    },
+    panel: {
+      backgroundColor: theme.surface,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 18
+    },
+    sectionTitle: {
+      color: theme.text,
+      fontSize: 16,
+      fontWeight: "800",
+      marginBottom: 10
+    },
+    fieldLabel: {
+      marginBottom: 6,
+      color: theme.muted,
+      fontSize: 11,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.7
+    },
+    input: {
+      minHeight: 48,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceElevated,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      color: theme.text,
+      fontSize: 13
+    },
+    textarea: {
+      minHeight: 110,
+      textAlignVertical: "top",
+      marginBottom: 12
+    },
+    textareaSm: {
+      minHeight: 90,
+      textAlignVertical: "top",
+      marginBottom: 12
+    },
+    secondaryButton: {
+      minHeight: 46,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceSoft,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12
+    },
+    secondaryButtonText: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    infoCard: {
+      backgroundColor: theme.surfaceSoft,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 14,
+      marginBottom: 12
+    },
+    infoTitle: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: "800"
+    },
+    infoText: {
+      marginTop: 6,
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    mediaRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 14
+    },
+    mediaChip: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceElevated,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 8
+    },
+    mediaChipDisabled: {
+      opacity: 0.6
+    },
+    mediaChipText: {
+      color: theme.text,
+      fontSize: 11,
+      fontWeight: "800"
+    },
+    mediaChipTextDisabled: {
+      color: theme.muted
+    },
+    mediaMetaCard: {
+      backgroundColor: theme.surfaceSoft,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 10
+    },
+    mediaMetaText: {
+      color: theme.muted,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    primaryButton: {
+      minHeight: 48,
+      borderRadius: 18,
+      backgroundColor: theme.accentStrong,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    primaryButtonText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "800"
+    },
+    buttonDisabled: {
+      opacity: 0.75
+    }
+  };
+}
